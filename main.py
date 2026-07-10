@@ -3,8 +3,8 @@ import random
 from discord.ext import commands
 import yt_dlp
 import asyncio
-import os
 from dotenv import load_dotenv
+import os
 
 load_dotenv(dotenv_path="D:/musicBOT/.env")
 
@@ -22,11 +22,15 @@ ytdl_options = {
     "format": "bestaudio/best",
     "noplaylist": True,
     "default_search": "ytsearch",
-    "quiet": True
+    "quiet": True,
+    "nocheckcertificate": True,
+    "ignoreerrors": True,
+    "extract_flat": False
 }
 
 ffmpeg_options = {
-    "options": "-vn"
+    "options": "-vn",
+    "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
 }
 
 ytdl = yt_dlp.YoutubeDL(ytdl_options)
@@ -62,8 +66,10 @@ async def tocar_proxima(ctx):
     )
 
     def depois(erro):
+        print("a música terminou ou o player encerrou.")
+
         if erro:
-            print(erro)
+            print("ERRO NO PLAYER:", erro)
 
         asyncio.run_coroutine_threadsafe(
             tocar_proxima(ctx),
@@ -78,8 +84,18 @@ async def tocar_proxima(ctx):
 async def on_ready():
     print(f"Bot conectado como {bot.user}")
 
+@bot.event
+async def on_voice_state_update(member, before, after):
+    if member == bot.user:
+        print("Mudança no estado de voz:")
+        print(before.channel, "->", after.channel)
+
 @bot.command()
 async def entrar(ctx):
+
+    if ctx.voice_client:
+        await ctx.send("Já estou conectado.")
+        return
 
     if ctx.author.voice:
 
@@ -126,6 +142,7 @@ async def oi(ctx):
 async def dado(ctx):
     numero = random.randint(1, 6)
     await ctx.send(f"🎲 Você tirou {numero}!")
+
 
 @bot.command()
 async def pausar(ctx):
