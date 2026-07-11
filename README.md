@@ -1,43 +1,192 @@
-este é um bot de música e de comandos simples para discord desenvolvido inteiramente em Python VScode
+# 🎵 MusicBOT para Discord inteiramente em python
 
-funcionalidades:
-- ele consegue entrar em canais de voz
-- possui todas as funções padrão de um BOT de musica para discord
-- responde comandos personalizados
+Um bot para Discord desenvolvido em **Python** usando **discord.py**, com foco em músicas, moderação de servidores e comandos de interação.
+(ao instalar, use !ajuda para listar os comandos disponiveis)
 
-comandos dentro do discord:
-1. !ping / responde com "Pong! 🏓"
-2. !oi / diz olá
-3. !dado / rola um dado
-4. !entrar / entra no canal de voz
-5. !tocar <pesquisa> / toca uma música
-6. !fim / finaliza a música atual
-7. !sair / sai do canal de voz
-8. !ajuda / mostra os comandos disponíveis
-9. !continuar / retoma a música pausada
-10. !pausar / pausa a música em execução
-11. !encerrar / limpa a fila de músicas
+---
 
-DIFERENCIAIS:
-facil de modificar/adicionar
-bem organizado, facil de entender
-linguagem simples
+## as funcionalidades
 
-Suas Tecnologias:
-- Python
+### Música
+- ele em canais de voz
+- toca de músicas pelo YouTube
+- tem um sistema de fila
+- tem replay de músicas
+- Pausa e continua a música
+- encerra a música
+- limpar fila
+- sai do canal de voz
+
+---
+
+### Moderação
+
+- Ban
+- Unban
+- Kick
+- Mute (Timeout)
+- Unmute
+- Advertências (Warnings)
+- Lista advertências
+- Remove advertências
+- Limpa mensagens
+- Lock/Unlock de canais
+- LockAll/UnlockAll para todos os canais
+
+As advertências são armazenadas em um banco de dados **SQLite**.
+
+---
+
+### Interação
+
+- Calculadora de Ship 
+- Ranking dos melhores Ships
+- Dado aleatório 
+- Ping
+- Olá
+- Comando de ajuda
+
+Os Ships são armazenados em um arquivo JSON para manter o histórico.
+
+---
+
+## Estrutura do projeto
+
+```
+musicBOT/
+│
+├── main.py
+├── database.db
+├── ships.json
+├── requirements.txt
+├── README.md
+├── .env
+└── .gitignore
+```
+
+---
+
+## Tecnologias usadas
+
+- Python 3
 - discord.py
+- yt-dlp
 - FFmpeg
+- SQLite
+- python-dotenv
 
-Como instalar:
-1. clone o projeto
-2. instale as dependências com este comando no terminal powershell:
+---
 
+## passo a passo da instalação
+
+Clone o repositório:
+
+```bash
+git clone https://github.com/SEU-USUARIO/musicBOT.git
+```
+
+Entre na pasta:
+
+```bash
+cd musicBOT
+```
+
+Instale as dependências:
+
+```bash
 pip install -r requirements.txt
+```
 
-após isso...
+---
 
-3. configure o token do SEU bot de Discord (dica: é importante que voce nao deixe seu token exposto, crie um .env e coloque-o la)
-4. e agora o execute
+## Configuração
 
-<img width="1576" height="937" alt="image" src="https://github.com/user-attachments/assets/3e6d1394-59e2-4813-a6b0-24ad41c65f63" />
+Crie um arquivo `.env` na raiz do projeto:
+
+```env
+DISCORD_TOKEN=SEU_TOKEN_AQUI
+```
+
+> IMPORTANTE: nunca envie o seu `.env` para o GitHub, pois lá vai ficar os seus Tokens e informações que nao podem ser publicas.
+
+---
+
+## Executando
+
+```bash
+python main.py
+```
+
+---
+
+## Comandos do bot para usar no discord:
+
+### Música
+
+| Comando | Descrição |
+|----------|-----------|
+| `!entrar` | Entra no canal de voz |
+| `!tocar <música>` | Toca uma música |
+| `!replay` | Repete a última música |
+| `!pausar` | Pausa a música |
+| `!continuar` | Continua a reprodução |
+| `!fim` | Finaliza a música |
+| `!encerrar` | Limpa a fila |
+| `!sair` | Sai do canal |
+
+---
+
+### Moderação
+
+| Comando | Descrição |
+|----------|-----------|
+| `!mute` | Silencia um usuário |
+| `!unmute` | Remove o silêncio |
+| `!warn` | Adiciona advertência |
+| `!warnings` | Lista advertências |
+| `!clearwarns` | Remove advertências |
+| `!ban` | Bane um usuário |
+| `!unban` | Remove banimento |
+| `!kick` | Expulsa um usuário |
+| `!clear` | Apaga mensagens |
+| `!lock` | Bloqueia o canal |
+| `!unlock` | Desbloqueia o canal |
+| `!lockall` | Bloqueia todos os canais |
+| `!unlockall` | Desbloqueia todos os canais |
+
+---
+
+### Diversão
+
+| Comando | Descrição |
+|----------|-----------|
+| `!ship @user1 @user2` | Calcula compatibilidade |
+| `!topships` | Ranking dos ships |
+| `!dado` | Rola um dado com numeros de 1 a 6 |
+| `!oi` | te cumprimenta |
+| `!ping` | Testa latência e responde com pong |
+| `!ajuda` | Exibe a lista de comandos |
+
+
+---
+
+## Banco de Dados
+
+O projeto utiliza **SQLite** para armazenar:
+
+- Advertências
+- Moderador responsável
+- Motivo da advertência
+
+---
+
+## Requisitos
+
+Além das bibliotecas Python, é necessário possuir o **FFmpeg** instalado e configurado no PATH do sistema.
+
+---
+
+## Licença
+
+Este projeto foi desenvolvido para fins de estudo e aprendizado utilizando Python e Discord.py.
 
