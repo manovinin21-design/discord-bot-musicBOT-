@@ -1,5 +1,8 @@
 # 🎵 MusicBOT para Discord inteiramente em python
 
+<img width="1866" height="934" alt="image" src="https://github.com/user-attachments/assets/c4772af2-fb27-4950-9ae5-666e9ba46837" />
+
+
 Um bot para Discord desenvolvido em **Python** usando **discord.py**, com foco em músicas, moderação de servidores e comandos de interação.
 (ao instalar, use !ajuda para listar os comandos disponiveis)
 
