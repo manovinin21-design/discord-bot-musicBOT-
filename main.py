@@ -47,13 +47,24 @@ async def on_command_error(ctx: commands.Context, error: Exception):
     elif isinstance(error, commands.MemberNotFound):
         await ctx.send("❌ Usuário não encontrado.")
     elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send("❌ Faltam argumentos no comando.")
+        await ctx.send("❌ Ta faltando algo no comando.")
     elif isinstance(error, commands.BadArgument):
-        await ctx.send("❌ Argumento inválido. Confira o comando no !ajuda.")
+        await ctx.send("❌ Comando inválido. Confira o comando no !ajuda.")
     elif isinstance(error, commands.NotOwner):
         await ctx.send("❌ Apenas o dono do bot pode usar esse comando.")
     elif isinstance(error, commands.NoPrivateMessage):
         await ctx.send("❌ Esse comando só funciona dentro de um servidor.")
+    elif isinstance(error, commands.CommandOnCooldown):
+        await ctx.send(
+            f"⏳ Calma! Tente de novo em {error.retry_after:.0f} segundo(s)."
+        )
+    elif isinstance(error, commands.CommandInvokeError) and isinstance(
+        error.original, discord.Forbidden
+    ):
+        await ctx.send(
+            "❌ Não tenho permissão suficiente para fazer isso. "
+            "Confira o meu cargo e as permissões do canal."
+        )
     elif isinstance(error, commands.CommandNotFound):
         pass  # Silently ignore unknown commands
     else:

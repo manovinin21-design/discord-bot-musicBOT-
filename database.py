@@ -6,6 +6,9 @@ import time
 from typing import Optional, Tuple, List
 from config import DATABASE_PATH
 
+# Quantos reports de bug ficam guardados; os mais antigos são apagados
+LIMITE_REPORTS = 25
+
 
 class Database:
     """SQLite database handler."""
@@ -79,6 +82,17 @@ class Database:
                     tipo TEXT,
                     channel_id INTEGER,
                     PRIMARY KEY(guild_id, tipo)
+                )
+            """)
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS bug_reports (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    user_name TEXT,
+                    guild_name TEXT,
+                    texto TEXT,
+                    created_at INTEGER
                 )
             """)
 
@@ -305,6 +319,47 @@ class Database:
             print(f"❌ Error removing message channel: {e}")
             self.connection.rollback()
             return False
+
+    async def add_bug_report(
+        self, user_id: int, user_name: str, guild_name: str, texto: str
+    ) -> bool:
+        """Guarda um report de bug, mantendo só os LIMITE_REPORTS mais recentes."""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(
+                """INSERT INTO bug_reports
+                   (user_id, user_name, guild_name, texto, created_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (user_id, user_name, guild_name, texto, int(time.time()))
+            )
+            # Apaga os mais antigos quando o limite é ultrapassado
+            cursor.execute(
+                """DELETE FROM bug_reports WHERE id NOT IN
+                   (SELECT id FROM bug_reports ORDER BY id DESC LIMIT ?)""",
+                (LIMITE_REPORTS,)
+            )
+            self.connection.commit()
+            cursor.close()
+            return True
+        except sqlite3.Error as e:
+            print(f"❌ Error adding bug report: {e}")
+            self.connection.rollback()
+            return False
+
+    async def get_bug_reports(self) -> List[sqlite3.Row]:
+        """Retorna todos os reports de bug, do mais recente ao mais antigo."""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(
+                """SELECT id, user_id, user_name, guild_name, texto, created_at
+                   FROM bug_reports ORDER BY id DESC"""
+            )
+            results = cursor.fetchall()
+            cursor.close()
+            return results if results else []
+        except sqlite3.Error as e:
+            print(f"❌ Error getting bug reports: {e}")
+            return []
 
     def close(self):
         """Close database connection."""

@@ -3,6 +3,12 @@
 import discord
 from discord.ext import commands
 
+from database import db
+
+# Tamanho máximo de um report — precisa caber no campo de embed do
+# !showreports (limite de 1024 caracteres, contando a linha da data)
+LIMITE_TEXTO_REPORT = 900
+
 
 class Admin(commands.Cog):
     """Administrative commands."""
@@ -150,12 +156,94 @@ class Admin(commands.Cog):
 
         if self.bot.user:
             embed.set_thumbnail(url=self.bot.user.display_avatar.url)
-        embed.set_footer(
-            text=f"{self.bot.user.name} • use !ajuda para ver os comandos",
-            icon_url=self.bot.user.display_avatar.url
-        )
+            embed.set_footer(
+                text=f"{self.bot.user.name} • use !ajuda para ver os comandos",
+                icon_url=self.bot.user.display_avatar.url
+            )
 
         await ctx.send(embed=embed)
+
+    @commands.command()
+    @commands.cooldown(1, 60, commands.BucketType.user)
+    async def reportbug(self, ctx: commands.Context, *, texto: str):
+        """Envia um report de bug para o dono do bot."""
+        texto = texto.strip()
+        if not texto:
+            await ctx.send(
+                "❌ Escreva o problema depois do comando — "
+                "ex.: `!reportbug o !skip travou`."
+            )
+            return
+
+        cortado = len(texto) > LIMITE_TEXTO_REPORT
+        if cortado:
+            texto = texto[:LIMITE_TEXTO_REPORT]
+
+        guild_nome = ctx.guild.name if ctx.guild else "Mensagem privada (DM)"
+
+        sucesso = await db.add_bug_report(
+            ctx.author.id, ctx.author.name, guild_nome, texto
+        )
+        if not sucesso:
+            await ctx.send("❌ Não consegui salvar o report. Tente de novo.")
+            return
+
+        mensagem = "✅ Report enviado! Obrigado por avisar 🐛"
+        if cortado:
+            mensagem += (
+                f"\n(A mensagem era muito longa e foi cortada em "
+                f"{LIMITE_TEXTO_REPORT} caracteres.)"
+            )
+        await ctx.send(mensagem)
+
+    @commands.command()
+    @commands.is_owner()
+    async def showreports(self, ctx: commands.Context):
+        """Mostra os reports de bug armazenados (só o dono)."""
+        reports = await db.get_bug_reports()
+
+        if not reports:
+            await ctx.send("📭 Nenhum report de bug armazenado.")
+            return
+
+        embed = discord.Embed(
+            title="🐛 Reports de bugs",
+            description=(
+                f"**{len(reports)}** report(s) armazenado(s), "
+                "do mais recente ao mais antigo:"
+            ),
+            color=discord.Color.red()
+        )
+        embeds = [embed]
+        total_chars = len(embed.title) + len(embed.description)
+
+        for report in reports:
+            nome = (
+                f"👤 {report['user_name']} — 🌐 {report['guild_name']}"
+            )[:256]
+            texto = report["texto"]
+            if len(texto) > LIMITE_TEXTO_REPORT:
+                texto = texto[:LIMITE_TEXTO_REPORT] + "…"
+            valor = f"{texto}\n🕒 <t:{report['created_at']}:f>"
+
+            # Limites do Discord: 25 campos e 6000 caracteres por embed —
+            # quando estourar, continua em um embed novo
+            if (
+                len(embed.fields) >= 25
+                or total_chars + len(nome) + len(valor) > 5500
+            ):
+                embed = discord.Embed(
+                    title="🐛 Reports de bugs (continuação)",
+                    color=discord.Color.red()
+                )
+                embeds.append(embed)
+                total_chars = len(embed.title)
+
+            embed.add_field(name=nome, value=valor, inline=False)
+            total_chars += len(nome) + len(valor)
+
+        for item in embeds:
+            await ctx.send(embed=item)
 
     @commands.command()
     async def ajuda(self, ctx: commands.Context):
@@ -178,7 +266,8 @@ class Admin(commands.Cog):
                 "`!topships` — ranking dos ships mais altos\n"
                 "`!kiss <usuário>` — beija um usuário\n"
                 "`!rank [usuário]` — rank de XP de um usuário\n"
-                "`!leaderboard` — ranking de XP do servidor"
+                "`!leaderboard` — ranking de XP do servidor\n"
+                "`!reportbug <mensagem>` — reporta um bug para o dono do bot"
             ),
             inline=False
         )
