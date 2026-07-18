@@ -21,12 +21,13 @@ YTDL_OPTIONS = {
     "extract_flat": False
 }
 
+# Obs.: sem "-reconnect_at_eof" — ele faz o FFmpeg tentar reconectar no fim
+# do arquivo, o que atrasava vários segundos a troca para a próxima música
 FFMPEG_OPTIONS = {
     "before_options": (
         "-reconnect 1 "
         "-reconnect_streamed 1 "
-        "-reconnect_delay_max 10 "
-        "-reconnect_at_eof 1"
+        "-reconnect_delay_max 5"
     ),
     "options": (
         "-vn "

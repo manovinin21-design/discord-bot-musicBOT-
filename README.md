@@ -12,7 +12,9 @@ O **JotaBeEli** é um bot de Discord completo, desenvolvido inteiramente em Pyth
 
 ## ✨ O que ele faz
 
-- 🎶 **Música do YouTube** — busca por nome ou link, fila por servidor, pause/resume, replay, remoção e reordenação de músicas, barra de progresso e embeds bonitos com thumbnail
+- 🎶 **Música do YouTube** — busca por nome ou link, fila por servidor, pause/resume, replay, navegação pelo tempo da música (`!jumpto`), letra da música (`!lyrics`), remoção e reordenação de músicas, barra de progresso e embeds bonitos com thumbnail
+- ⚡ **Player rápido** — o link do áudio é resolvido na busca e a próxima música é pré-carregada em segundo plano, então a troca de faixas é praticamente instantânea
+- 💬 **Mensagens automáticas** — boas-vindas, despedidas e agradecimento de boost em embeds com a foto do membro, cada uma ativada no canal que você escolher
 - 📊 **Sistema de XP** — os membros ganham XP conversando (com cooldown anti-spam), sobem de nível e disputam o ranking do servidor
 - 🛡️ **Moderação completa** — mute com tempo, ban/kick, advertências salvas em banco de dados, bloqueio de canais individual ou em massa e limpeza de mensagens
 - 💘 **Social** — calculadora de ship com ranking dos casais, beijos com GIFs e mais
@@ -51,11 +53,29 @@ O **JotaBeEli** é um bot de Discord completo, desenvolvido inteiramente em Pyth
 | `!mover <de> <para>` | Muda uma música de posição na fila |
 | `!skip` | Pula para a próxima música |
 | `!pausar` / `!continuar` | Pausa e retoma a música |
+| `!jumpto <tempo>` | Pula a música para um momento específico (ex.: `!jumpto 1:23`) |
+| `!reset` | Reseta o tempo da música (volta para o início) |
 | `!duração` | Progresso da música atual com barra (atalho: `!np`) |
-| `!replay` | Toca de novo a última música |
+| `!replay` | Volta para o início da última música tocada — a atual fica como próxima |
+| `!replayall` | Duplica todas as músicas (até as que já tocaram) e coloca como próximas |
+| `!lyrics` | Mostra a letra da música atual ou a legenda do vídeo (atalho: `!letra`) |
 | `!fim` | Finaliza a música atual |
 | `!encerrar` | Limpa a fila |
 | `!sair` | Sai do canal de voz |
+
+### 💬 Mensagens automáticas
+
+Embeds de boas-vindas, saída e boost com a foto do membro. **Elas vêm desativadas** — cada uma só passa a funcionar depois que você ativar com o comando dela (é preciso a permissão *Gerenciar servidor*):
+
+| Comando | O que faz |
+|---|---|
+| `!addmsgin <#canal>` | Ativa as mensagens de boas-vindas no canal escolhido |
+| `!addmsgout <#canal>` | Ativa as mensagens de saída no canal escolhido |
+| `!addmsgboost <#canal>` | Ativa as mensagens de boost no canal escolhido |
+| `!delmsgin` / `!delmsgout` / `!delmsgboost` | Desativa a mensagem correspondente |
+| `!msgconfig` | Mostra os canais configurados no servidor |
+
+> ⚠️ Essas mensagens dependem do **Server Members Intent** ativado no Discord Developer Portal (passo 2 da instalação).
 
 ### 🛡️ Moderação
 
@@ -82,7 +102,8 @@ O **JotaBeEli** é um bot de Discord completo, desenvolvido inteiramente em Pyth
 - [discord.py](https://discordpy.readthedocs.io/) — conexão com o Discord
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) — busca e extração de áudio do YouTube
 - [FFmpeg](https://ffmpeg.org/) — processamento do áudio
-- SQLite — banco de dados de XP e advertências (nativo do Python, sem instalar nada)
+- SQLite — banco de dados de XP, advertências e configuração das mensagens automáticas (nativo do Python, sem instalar nada)
+- [LRCLIB](https://lrclib.net/) — busca de letras de música para o `!lyrics` (API gratuita, sem chave)
 
 ---
 
@@ -150,6 +171,7 @@ musicBOT/
 ├── database.py     # Banco de dados SQLite (XP e advertências)
 ├── utils.py        # Funções auxiliares compartilhadas
 ├── music.py        # 🎵 Comandos de música
+├── eventos.py      # 💬 Mensagens de boas-vindas, saída e boost
 ├── moderation.py   # 🛡️ Comandos de moderação
 ├── xp.py           # 📊 Sistema de XP e níveis
 ├── social.py       # 💘 Ship, kiss e afins

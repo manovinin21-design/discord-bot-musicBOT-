@@ -59,6 +59,26 @@ def formatar_tempo(segundos: float) -> str:
     return f"{minutos}:{seg:02d}"
 
 
+def parsear_tempo(texto: str):
+    """Converte "90", "1:30" ou "1:02:03" em segundos. Retorna None se inválido."""
+    partes = texto.strip().split(":")
+    if not 1 <= len(partes) <= 3:
+        return None
+
+    try:
+        numeros = [int(parte) for parte in partes]
+    except ValueError:
+        return None
+
+    if any(numero < 0 for numero in numeros):
+        return None
+
+    segundos = 0
+    for numero in numeros:
+        segundos = segundos * 60 + numero
+    return segundos
+
+
 def barra_progresso(decorrido: float, total: float, tamanho: int = 14) -> str:
     """Monta uma barra de progresso tipo ▬▬▬🔘▬▬▬▬."""
     if not total or total <= 0:

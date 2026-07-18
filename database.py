@@ -73,6 +73,15 @@ class Database:
                 )
             """)
 
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS mensagens_config (
+                    guild_id INTEGER,
+                    tipo TEXT,
+                    channel_id INTEGER,
+                    PRIMARY KEY(guild_id, tipo)
+                )
+            """)
+
             self._migrate_warnings(cursor)
 
             self.connection.commit()
@@ -242,6 +251,60 @@ class Database:
         except sqlite3.Error as e:
             print(f"❌ Error getting warning count: {e}")
             return 0
+
+    async def set_canal_mensagem(
+        self, guild_id: int, tipo: str, channel_id: int
+    ) -> bool:
+        """Define o canal das mensagens automáticas (entrada/saida/boost)."""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(
+                """INSERT OR REPLACE INTO mensagens_config
+                   (guild_id, tipo, channel_id) VALUES (?, ?, ?)""",
+                (guild_id, tipo, channel_id)
+            )
+            self.connection.commit()
+            cursor.close()
+            return True
+        except sqlite3.Error as e:
+            print(f"❌ Error setting message channel: {e}")
+            self.connection.rollback()
+            return False
+
+    async def get_canal_mensagem(
+        self, guild_id: int, tipo: str
+    ) -> Optional[int]:
+        """Retorna o canal configurado para um tipo de mensagem, ou None."""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(
+                """SELECT channel_id FROM mensagens_config
+                   WHERE guild_id=? AND tipo=?""",
+                (guild_id, tipo)
+            )
+            result = cursor.fetchone()
+            cursor.close()
+            return result[0] if result else None
+        except sqlite3.Error as e:
+            print(f"❌ Error getting message channel: {e}")
+            return None
+
+    async def remover_canal_mensagem(self, guild_id: int, tipo: str) -> bool:
+        """Desativa um tipo de mensagem automática. Retorna se algo foi removido."""
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute(
+                "DELETE FROM mensagens_config WHERE guild_id=? AND tipo=?",
+                (guild_id, tipo)
+            )
+            removido = cursor.rowcount > 0
+            self.connection.commit()
+            cursor.close()
+            return removido
+        except sqlite3.Error as e:
+            print(f"❌ Error removing message channel: {e}")
+            self.connection.rollback()
+            return False
 
     def close(self):
         """Close database connection."""

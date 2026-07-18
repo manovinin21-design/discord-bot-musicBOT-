@@ -1,20 +1,35 @@
 """Cog de música: fila, player e controles de voz."""
 
 import asyncio
+import re
 import time
 from dataclasses import dataclass
 from typing import Optional
 
+import aiohttp
 import discord
 import yt_dlp
 from discord.ext import commands
 
 from config import YTDL_OPTIONS, FFMPEG_OPTIONS
-from utils import formatar_tempo, barra_progresso
+from utils import formatar_tempo, barra_progresso, parsear_tempo
 
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
 
 COR_MUSICA = discord.Color.from_rgb(88, 101, 242)
+
+# Quantas músicas já tocadas ficam guardadas por servidor (!replay/!replayall)
+LIMITE_HISTORICO = 200
+
+# Idiomas preferidos ao procurar legendas no vídeo (!lyrics)
+IDIOMAS_LEGENDA = ["pt", "pt-BR", "pt-PT", "en", "en-US"]
+
+# Trechos removidos do título ao procurar a letra da música
+RUIDO_TITULO = re.compile(
+    r"[\(\[\{][^\)\]\}]*[\)\]\}]"
+    r"|(?i:official|oficial|clipe|video|vídeo|lyrics?|audio|áudio"
+    r"|visualizer|legendado|remaster(?:ed)?|hd|4k|mv)"
+)
 
 
 @dataclass
@@ -26,6 +41,8 @@ class Musica:
     duracao: Optional[int]        # em segundos; None para lives
     thumb: Optional[str]
     pedido_por: str
+    stream_url: Optional[str] = None   # link direto do áudio (expira)
+    stream_expira: float = 0.0         # quando o link direto deixa de valer
 
     @property
     def duracao_texto(self) -> str:
@@ -41,8 +58,10 @@ class Music(commands.Cog):
         self.bot = bot
         self.filas = {}           # guild_id -> lista de Musica
         self.ultima_musica = {}   # guild_id -> última Musica tocada
+        self.historicos = {}      # guild_id -> Musicas já tocadas, em ordem
         self.tocando_agora = {}   # guild_id -> {"musica": Musica, "inicio": float}
         self.locks = {}           # guild_id -> asyncio.Lock (evita play duplo)
+        self.ignorar_fim = set()  # guilds cujo próximo "fim" é um seek, não um fim
 
     # ------------------------------------------------------------------
     # Helpers
@@ -54,6 +73,12 @@ class Music(commands.Cog):
             self.filas[guild_id] = []
         return self.filas[guild_id]
 
+    def historico_de(self, guild_id: int) -> list:
+        """Retorna (criando se preciso) o histórico de músicas do servidor."""
+        if guild_id not in self.historicos:
+            self.historicos[guild_id] = []
+        return self.historicos[guild_id]
+
     def lock_de(self, guild_id: int) -> asyncio.Lock:
         """Retorna (criando se preciso) o lock do player do servidor."""
         if guild_id not in self.locks:
@@ -61,8 +86,9 @@ class Music(commands.Cog):
         return self.locks[guild_id]
 
     def limpar_estado(self, guild_id: int):
-        """Limpa fila e música atual de um servidor."""
+        """Limpa fila, histórico e música atual de um servidor."""
         self.fila_de(guild_id).clear()
+        self.historico_de(guild_id).clear()
         self.tocando_agora.pop(guild_id, None)
 
     async def conectar_voz(self, ctx: commands.Context) -> bool:
@@ -99,6 +125,36 @@ class Music(commands.Cog):
 
         return info
 
+    @staticmethod
+    def _expira_stream(stream_url: Optional[str]) -> float:
+        """Calcula até quando um link direto de áudio continua válido."""
+        if not stream_url:
+            return 0.0
+
+        # Links do YouTube trazem o horário de expiração na própria URL
+        match = re.search(r"[?&]expire=(\d+)", stream_url)
+        if match:
+            return int(match.group(1)) - 60  # margem de segurança
+
+        return time.time() + 20 * 60
+
+    async def resolver_stream(self, musica: Musica) -> bool:
+        """Garante que a música tem um link de áudio válido para tocar.
+
+        Reaproveita o link obtido na busca original enquanto ele vale —
+        é isso que faz a música começar rápido, sem buscar tudo de novo.
+        """
+        if musica.stream_url and time.time() < musica.stream_expira:
+            return True
+
+        info = await self.buscar_info(musica.url)
+        if info is None or "url" not in info:
+            return False
+
+        musica.stream_url = info["url"]
+        musica.stream_expira = self._expira_stream(info["url"])
+        return True
+
     def embed_tocando(self, musica: Musica) -> discord.Embed:
         """Embed de "tocando agora"."""
         embed = discord.Embed(
@@ -111,6 +167,27 @@ class Music(commands.Cog):
         if musica.thumb:
             embed.set_thumbnail(url=musica.thumb)
         return embed
+
+    def _criar_callback(self, ctx: commands.Context):
+        """Cria o callback chamado pelo player quando uma música termina."""
+        guild_id = ctx.guild.id
+
+        def depois(erro):
+            if erro:
+                print("ERRO NO PLAYER:", erro)
+
+            # Um seek (!jumpto/!reset) para o player de propósito;
+            # nesse caso não é para pular para a próxima música
+            if guild_id in self.ignorar_fim:
+                self.ignorar_fim.discard(guild_id)
+                return
+
+            asyncio.run_coroutine_threadsafe(
+                self.tocar_proxima(ctx),
+                self.bot.loop
+            )
+
+        return depois
 
     async def tocar_proxima(self, ctx: commands.Context):
         """Toca a próxima música da fila."""
@@ -135,10 +212,9 @@ class Music(commands.Cog):
                 musica = fila.pop(0)
                 self.ultima_musica[guild_id] = musica
 
-                # Busca de novo na hora de tocar: o link direto do áudio
-                # expira, então guardamos a página e resolvemos o stream aqui
-                info = await self.buscar_info(musica.url)
-                if info is None or "url" not in info:
+                # O link direto do áudio expira; o resolver reaproveita o
+                # que já temos e só busca de novo quando é preciso
+                if not await self.resolver_stream(musica):
                     await ctx.send(f"❌ Não consegui tocar: **{musica.titulo}**")
                     continue  # tenta a próxima da fila
 
@@ -147,26 +223,213 @@ class Music(commands.Cog):
                     self.tocando_agora.pop(guild_id, None)
                     return
 
-                source = discord.FFmpegPCMAudio(info["url"], **FFMPEG_OPTIONS)
+                source = discord.FFmpegPCMAudio(
+                    musica.stream_url, **FFMPEG_OPTIONS
+                )
 
                 self.tocando_agora[guild_id] = {
                     "musica": musica,
                     "inicio": time.time()
                 }
 
-                def depois(erro):
-                    if erro:
-                        print("ERRO NO PLAYER:", erro)
+                historico = self.historico_de(guild_id)
+                historico.append(musica)
+                del historico[:-LIMITE_HISTORICO]
 
-                    asyncio.run_coroutine_threadsafe(
-                        self.tocar_proxima(ctx),
-                        self.bot.loop
-                    )
+                ctx.voice_client.play(source, after=self._criar_callback(ctx))
 
-                ctx.voice_client.play(source, after=depois)
+                # Resolve o áudio da próxima em segundo plano, para a troca
+                # de música ser praticamente instantânea
+                if fila:
+                    asyncio.create_task(self.resolver_stream(fila[0]))
                 break
 
         await ctx.send(embed=self.embed_tocando(musica))
+
+    async def pular_para(self, ctx: commands.Context, segundos: int) -> bool:
+        """Reposiciona a música atual em um tempo específico."""
+        guild_id = ctx.guild.id
+        atual = self.tocando_agora.get(guild_id)
+        vc = ctx.voice_client
+
+        if not atual or not vc or not (vc.is_playing() or vc.is_paused()):
+            await ctx.send("Não há nenhuma música tocando.")
+            return False
+
+        musica = atual["musica"]
+
+        if not musica.duracao:
+            await ctx.send("❌ Não dá para navegar em uma transmissão ao vivo.")
+            return False
+
+        if segundos >= musica.duracao:
+            await ctx.send(
+                f"❌ A música só tem **{formatar_tempo(musica.duracao)}**."
+            )
+            return False
+
+        if not await self.resolver_stream(musica):
+            await ctx.send("❌ Não consegui recuperar o áudio da música.")
+            return False
+
+        opcoes = dict(FFMPEG_OPTIONS)
+        opcoes["before_options"] = (
+            f"-ss {segundos} {FFMPEG_OPTIONS['before_options']}"
+        )
+        source = discord.FFmpegPCMAudio(musica.stream_url, **opcoes)
+
+        # O stop() abaixo dispara o callback de fim de música; a flag avisa
+        # que é um seek e não é para pular para a próxima
+        self.ignorar_fim.add(guild_id)
+        vc.stop()
+        try:
+            vc.play(source, after=self._criar_callback(ctx))
+        except discord.ClientException as e:
+            self.ignorar_fim.discard(guild_id)
+            print(f"❌ Erro ao reposicionar a música: {e}")
+            await ctx.send("❌ Não consegui reposicionar a música.")
+            return False
+
+        atual["inicio"] = time.time() - segundos
+        return True
+
+    # -------------------- Letra / legendas (!lyrics) --------------------
+
+    @staticmethod
+    def _limpar_titulo(titulo: str) -> str:
+        """Remove ruído tipo "(Official Video)" do título para a busca."""
+        limpo = RUIDO_TITULO.sub(" ", titulo)
+        limpo = re.sub(r"\s+", " ", limpo).strip(" -–|•")
+        return limpo or titulo
+
+    async def _letra_lrclib(
+        self, session: aiohttp.ClientSession, titulo: str
+    ) -> Optional[str]:
+        """Procura a letra da música no LRCLIB (API gratuita de letras)."""
+        try:
+            async with session.get(
+                "https://lrclib.net/api/search",
+                params={"q": self._limpar_titulo(titulo)},
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as resposta:
+                if resposta.status != 200:
+                    return None
+                resultados = await resposta.json()
+        except Exception as e:
+            print(f"❌ Erro ao buscar letra: {e}")
+            return None
+
+        for item in resultados or []:
+            letra = item.get("plainLyrics")
+            if letra and letra.strip():
+                return letra.strip()
+        return None
+
+    @staticmethod
+    def _escolher_legenda(info: dict) -> Optional[str]:
+        """Escolhe a melhor faixa de legenda (json3) do vídeo, se houver."""
+        manuais = info.get("subtitles") or {}
+        automaticas = info.get("automatic_captions") or {}
+
+        def url_json3(formatos):
+            for formato in formatos or []:
+                if formato.get("ext") == "json3" and formato.get("url"):
+                    return formato["url"]
+            return None
+
+        # Legendas feitas pelo autor têm prioridade, em qualquer idioma
+        for idioma in IDIOMAS_LEGENDA + sorted(manuais.keys()):
+            url = url_json3(manuais.get(idioma))
+            if url:
+                return url
+
+        # Automáticas: só nos idiomas preferidos ou no idioma original
+        originais = [k for k in automaticas if k.endswith("-orig")]
+        for idioma in IDIOMAS_LEGENDA + originais:
+            url = url_json3(automaticas.get(idioma))
+            if url:
+                return url
+
+        return None
+
+    @staticmethod
+    def _montar_texto_json3(dados: dict) -> Optional[str]:
+        """Converte a legenda no formato json3 do YouTube em texto corrido."""
+        linhas = []
+        for evento in dados.get("events", []):
+            segmentos = evento.get("segs")
+            if not segmentos:
+                continue
+            texto = "".join(s.get("utf8", "") for s in segmentos).strip()
+            if texto and texto != "\n" and (not linhas or linhas[-1] != texto):
+                linhas.append(texto)
+
+        return "\n".join(linhas) if linhas else None
+
+    async def _legenda_video(
+        self, session: aiohttp.ClientSession, musica: Musica
+    ) -> Optional[str]:
+        """Baixa e monta a legenda do vídeo atual, se existir."""
+        info = await self.buscar_info(musica.url)
+        if info is None:
+            return None
+
+        url_legenda = self._escolher_legenda(info)
+        if not url_legenda:
+            return None
+
+        try:
+            async with session.get(
+                url_legenda,
+                timeout=aiohttp.ClientTimeout(total=15)
+            ) as resposta:
+                if resposta.status != 200:
+                    return None
+                dados = await resposta.json(content_type=None)
+        except Exception as e:
+            print(f"❌ Erro ao baixar legenda: {e}")
+            return None
+
+        return self._montar_texto_json3(dados)
+
+    async def obter_letra(self, musica: Musica):
+        """Busca a letra da música; se não achar, cai para a legenda do vídeo.
+
+        Retorna (texto, fonte) ou (None, None).
+        """
+        async with aiohttp.ClientSession() as session:
+            letra = await self._letra_lrclib(session, musica.titulo)
+            if letra:
+                return letra, "letra via LRCLIB"
+
+            legenda = await self._legenda_video(session, musica)
+            if legenda:
+                return legenda, "legendas do vídeo"
+
+        return None, None
+
+    @staticmethod
+    def _dividir_texto(texto: str, limite: int = 3900, max_partes: int = 3):
+        """Divide um texto longo em blocos que cabem em embeds.
+
+        Retorna (partes, foi_cortado).
+        """
+        partes = []
+        restante = texto
+
+        while restante and len(partes) < max_partes:
+            if len(restante) <= limite:
+                partes.append(restante)
+                restante = ""
+                break
+
+            corte = restante.rfind("\n", 0, limite)
+            if corte < limite // 2:
+                corte = limite
+            partes.append(restante[:corte])
+            restante = restante[corte:].lstrip("\n")
+
+        return partes, bool(restante)
 
     # ------------------------------------------------------------------
     # Comandos
@@ -200,7 +463,10 @@ class Music(commands.Cog):
             url=info.get("webpage_url") or info.get("url", pesquisa),
             duracao=info.get("duration"),
             thumb=info.get("thumbnail"),
-            pedido_por=ctx.author.display_name
+            pedido_por=ctx.author.display_name,
+            # Guarda o link do áudio já resolvido: tocar fica instantâneo
+            stream_url=info.get("url"),
+            stream_expira=self._expira_stream(info.get("url"))
         )
 
         fila = self.fila_de(ctx.guild.id)
@@ -226,24 +492,135 @@ class Music(commands.Cog):
 
     @commands.command()
     async def replay(self, ctx: commands.Context):
-        """Repete a última música tocada."""
+        """Volta para o início da última música tocada; a atual fica como próxima."""
         guild_id = ctx.guild.id
+
+        if not await self.conectar_voz(ctx):
+            return
+
+        vc = ctx.voice_client
+        fila = self.fila_de(guild_id)
+        historico = self.historico_de(guild_id)
+        tocando = vc.is_playing() or vc.is_paused()
+
+        if tocando and guild_id in self.tocando_agora:
+            atual = self.tocando_agora[guild_id]["musica"]
+
+            if len(historico) >= 2:
+                anterior = historico[-2]
+                fila.insert(0, anterior)
+                fila.insert(1, atual)  # a atual volta a tocar em seguida
+                vc.stop()  # o callback de fim toca a "anterior"
+                await ctx.send(
+                    f"🔁 Voltando para **{anterior.titulo}** — "
+                    f"**{atual.titulo}** ficará como próxima."
+                )
+            else:
+                # Só a música atual já tocou: volta ela para o início
+                if await self.pular_para(ctx, 0):
+                    await ctx.send(
+                        f"🔁 **{atual.titulo}** voltou para o início."
+                    )
+            return
 
         if guild_id not in self.ultima_musica:
             await ctx.send("❌ Não existe nenhuma música anterior para repetir.")
             return
 
+        fila.insert(0, self.ultima_musica[guild_id])
+        await self.tocar_proxima(ctx)
+
+    @commands.command()
+    async def replayall(self, ctx: commands.Context):
+        """Duplica todas as músicas (fila e já tocadas) como próximas."""
+        guild_id = ctx.guild.id
+        fila = self.fila_de(guild_id)
+        historico = self.historico_de(guild_id)
+
+        duplicatas = list(historico) + list(fila)
+        if not duplicatas:
+            await ctx.send("❌ Não há músicas para duplicar.")
+            return
+
         if not await self.conectar_voz(ctx):
             return
 
-        musica = self.ultima_musica[guild_id]
-        fila = self.fila_de(guild_id)
-        fila.insert(0, musica)
+        fila[0:0] = duplicatas
 
-        if ctx.voice_client.is_playing() or ctx.voice_client.is_paused():
-            await ctx.send(f"🔁 Adicionei novamente: **{musica.titulo}**")
-        else:
+        embed = discord.Embed(
+            title="🔁 Replay geral!",
+            description=(
+                f"**{len(duplicatas)}** música(s) duplicadas e colocadas "
+                "como próximas — incluindo as que já tocaram."
+            ),
+            color=COR_MUSICA
+        )
+        embed.set_footer(text="Use !fila para conferir a ordem.")
+        await ctx.send(embed=embed)
+
+        vc = ctx.voice_client
+        if not (vc.is_playing() or vc.is_paused()):
             await self.tocar_proxima(ctx)
+
+    @commands.command()
+    async def jumpto(self, ctx: commands.Context, *, tempo: str):
+        """Pula a música atual para um momento específico (ex.: !jumpto 1:23)."""
+        segundos = parsear_tempo(tempo)
+
+        if segundos is None:
+            await ctx.send(
+                "❌ Tempo inválido. Use segundos ou m:ss — ex.: "
+                "`!jumpto 90` ou `!jumpto 1:30`."
+            )
+            return
+
+        if await self.pular_para(ctx, segundos):
+            await ctx.send(f"⏩ Pulei para **{formatar_tempo(segundos)}**.")
+
+    @commands.command()
+    async def reset(self, ctx: commands.Context):
+        """Reseta o tempo da música atual (volta para o início)."""
+        if await self.pular_para(ctx, 0):
+            await ctx.send("⏪ Música reiniciada do começo.")
+
+    @commands.command(aliases=["letra"])
+    async def lyrics(self, ctx: commands.Context):
+        """Mostra a letra da música atual (ou a legenda do vídeo)."""
+        atual = self.tocando_agora.get(ctx.guild.id)
+
+        if not atual:
+            await ctx.send("Não há nenhuma música tocando.")
+            return
+
+        musica = atual["musica"]
+
+        async with ctx.typing():
+            texto, fonte = await self.obter_letra(musica)
+
+        if not texto:
+            await ctx.send(
+                f"❌ Não encontrei a letra nem legendas para "
+                f"**{musica.titulo}**."
+            )
+            return
+
+        partes, cortado = self._dividir_texto(texto)
+        titulo_embed = f"🎤 {musica.titulo}"[:256]
+
+        for i, parte in enumerate(partes):
+            embed = discord.Embed(
+                title=titulo_embed if i == 0 else f"{titulo_embed[:245]} (cont.)",
+                description=parte,
+                color=COR_MUSICA
+            )
+            if i == 0 and musica.thumb:
+                embed.set_thumbnail(url=musica.thumb)
+            if i == len(partes) - 1:
+                rodape = f"Fonte: {fonte}"
+                if cortado:
+                    rodape += " • letra cortada por ser muito longa"
+                embed.set_footer(text=rodape)
+            await ctx.send(embed=embed)
 
     @commands.command()
     async def skip(self, ctx: commands.Context):

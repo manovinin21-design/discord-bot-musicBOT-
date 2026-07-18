@@ -17,6 +17,7 @@ from database import db
 intents = discord.Intents.default()
 intents.message_content = True
 intents.voice_states = True
+intents.members = True  # necessário para as mensagens de entrada/saída/boost
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -58,7 +59,7 @@ async def on_command_error(ctx: commands.Context, error: Exception):
         raise error
 
 
-COGS = ["admin", "fun", "moderation", "music", "social", "xp"]
+COGS = ["admin", "eventos", "fun", "moderation", "music", "social", "xp"]
 
 
 async def load_cogs():
