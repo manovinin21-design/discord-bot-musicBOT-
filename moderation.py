@@ -15,6 +15,12 @@ class Moderation(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    async def cog_check(self, ctx: commands.Context) -> bool:
+        """Moderação só faz sentido dentro de um servidor (guild_id)."""
+        if ctx.guild is None:
+            raise commands.NoPrivateMessage()
+        return True
+
     @commands.command()
     @commands.has_permissions(moderate_members=True)
     async def mute(

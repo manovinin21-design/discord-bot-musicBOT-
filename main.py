@@ -52,6 +52,8 @@ async def on_command_error(ctx: commands.Context, error: Exception):
         await ctx.send("❌ Argumento inválido. Confira o comando no !ajuda.")
     elif isinstance(error, commands.NotOwner):
         await ctx.send("❌ Apenas o dono do bot pode usar esse comando.")
+    elif isinstance(error, commands.NoPrivateMessage):
+        await ctx.send("❌ Esse comando só funciona dentro de um servidor.")
     elif isinstance(error, commands.CommandNotFound):
         pass  # Silently ignore unknown commands
     else:

@@ -20,6 +20,12 @@ class Social(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    async def cog_check(self, ctx: commands.Context) -> bool:
+        """Ships e afins são separados por servidor: precisam de um guild_id."""
+        if ctx.guild is None:
+            raise commands.NoPrivateMessage()
+        return True
+
     @commands.command()
     async def ship(
         self, ctx: commands.Context,

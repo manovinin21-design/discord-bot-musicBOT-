@@ -63,6 +63,12 @@ class Music(commands.Cog):
         self.locks = {}           # guild_id -> asyncio.Lock (evita play duplo)
         self.ignorar_fim = set()  # guilds cujo próximo "fim" é um seek, não um fim
 
+    async def cog_check(self, ctx: commands.Context) -> bool:
+        """Todos os comandos de música precisam de um servidor (guild_id)."""
+        if ctx.guild is None:
+            raise commands.NoPrivateMessage()
+        return True
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------

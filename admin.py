@@ -100,14 +100,13 @@ class Admin(commands.Cog):
         embed = discord.Embed(
             title="📜 Regras do JotaBeEli",
             description=(
-                "Para a resenha continuar boa para todo mundo, "
-                "siga estas regras ao usar o bot:"
+                "Regras do servidor do JotaBeEli"
             ),
             color=discord.Color.gold()
         )
 
         embed.add_field(
-            name="1️⃣ Sem spam de comandos",
+            name="1️ Sem spam de comandos",
             value=(
                 "Não fique repetindo comandos sem necessidade — isso "
                 "atrapalha o chat e pode travar as respostas do bot."
@@ -115,7 +114,7 @@ class Admin(commands.Cog):
             inline=False
         )
         embed.add_field(
-            name="2️⃣ Respeite a fila de músicas",
+            name="2️ Respeite a fila de músicas",
             value=(
                 "Não use `!skip`, `!encerrar` ou `!removerdafila` para "
                 "sabotar as músicas dos outros membros."
@@ -123,26 +122,28 @@ class Admin(commands.Cog):
             inline=False
         )
         embed.add_field(
-            name="3️⃣ Use os comandos no lugar certo",
+            name="3️ Use os comandos no lugar certo",
             value=(
                 "Comandos de música pedem que você esteja em um canal de "
                 "voz; comandos de moderação são só para a equipe."
             ),
             inline=False
         )
+
         embed.add_field(
-            name="4️⃣ Respeito acima de tudo",
+            name="4- Sem abusar de poder ou uso de forma incoveninente ",
             value=(
-                "Nada de usar `!ship`, `!kiss` ou os comandos sociais "
-                "para constranger alguém. É diversão, não provocação."
+                "Não se aproveite do seu cargo para se aproveitar e se "
+                "colocar acima do outro, sujeito a perca total do cargo."
             ),
             inline=False
         )
         embed.add_field(
-            name="5️⃣ Não explore bugs",
+            name="5- Não explore bugs",
             value=(
-                "Achou um problema? Avise o dono do bot em vez de abusar "
-                "dele. Quem explorar bugs pode perder o acesso."
+                "Achou um problema? Avise o dono do bot em vez "
+                "de se aproveitar dele. Quem explorar bugs "
+                "pode perder o acesso."
             ),
             inline=False
         )

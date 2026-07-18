@@ -22,6 +22,12 @@ class XP(commands.Cog):
         self.bot = bot
         self.ultimo_ganho = {}  # (user_id, guild_id) -> timestamp
 
+    async def cog_check(self, ctx: commands.Context) -> bool:
+        """XP é separado por servidor: os comandos precisam de um guild_id."""
+        if ctx.guild is None:
+            raise commands.NoPrivateMessage()
+        return True
+
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         """Dá XP por mensagem, respeitando o cooldown."""
