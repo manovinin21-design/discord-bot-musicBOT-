@@ -1,0 +1,11 @@
+# Blueprint do Render: cria o serviço do bot automaticamente.
+# No painel do Render: New + > Blueprint > escolher este repositório.
+services:
+  - type: web
+    name: jotabeeli
+    runtime: docker
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false  # o Render pede o valor na hora de criar o serviço

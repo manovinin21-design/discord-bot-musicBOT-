@@ -7,8 +7,11 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
 
+import os
+
 import discord
 import asyncio
+from aiohttp import web
 from discord.ext import commands
 from config import TOKEN
 from database import db
@@ -85,6 +88,30 @@ async def load_cogs():
             print(f"❌ Erro ao carregar {cog_name}: {e}")
 
 
+async def iniciar_webserver():
+    """Abre um servidor HTTP quando hospedado no Render.
+
+    O plano gratuito do Render só aceita "Web Services", que precisam
+    responder HTTP em uma porta. O Render define a variável PORT; rodando
+    localmente ela não existe e o servidor nem é iniciado.
+    """
+    porta = os.getenv("PORT")
+    if not porta:
+        return
+
+    async def status(request: web.Request) -> web.Response:
+        return web.Response(text="JotaBeEli online! 🎵")
+
+    app = web.Application()
+    app.router.add_get("/", status)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", int(porta))
+    await site.start()
+    print(f"🌐 Webserver ouvindo na porta {porta}")
+
+
 async def main():
     """Main entry point."""
     if not TOKEN:
@@ -92,6 +119,7 @@ async def main():
         return
 
     async with bot:
+        await iniciar_webserver()
         await load_cogs()
         try:
             await bot.start(TOKEN)
