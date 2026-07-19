@@ -120,6 +120,9 @@ class Social(commands.Cog):
     @commands.command()
     async def nakano(self, ctx: commands.Context):
         """Sorteia uma das quíntuplas."""
+        await ctx.send(
+            f"O USUARIO, {ctx.author.mention} ATIVOU O COMANDO SECRETO!"
+            )
         escolhida = random.choice(NAKANO_EMBEDS)
 
         embed = discord.Embed(

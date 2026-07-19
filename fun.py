@@ -38,6 +38,26 @@ class Fun(commands.Cog):
             "a resposta é: É: SIM, EU SOU RELACIONADO COM O 11 DE SETEMBRO"
         )
 
+    @commands.command()
+    async def para(self, ctx: commands.context):
+        """Comando secreto."""
+        await ctx.send(
+        f"O USUARIO, {ctx.author.mention} ATIVOU O COMANDO SECRETO!"
+        )
+        await ctx.send(
+            "oque é que voce disse cara?🥵"
+        )
+
+    @commands.command()
+    async def continua(self, ctx: commands.context):
+        """Comando secreto."""
+        await ctx.send(
+        f"O USUARIO {ctx.author.mention} ATIVOU O COMANDO SECRETO!"
+        )
+        await ctx.send(
+            "eu não estou te escutando 🥵"
+        )
+
 
 async def setup(bot: commands.Bot):
     """Setup do cog Fun."""
