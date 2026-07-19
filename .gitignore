@@ -7,3 +7,4 @@ database.db-wal
 database.db-shm
 *.bak
 cookies.txt
+cookies-ativos.txt

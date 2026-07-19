@@ -1,6 +1,7 @@
 """Configuration and constants for the Discord bot."""
 
 import os
+import shutil
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -32,7 +33,21 @@ YTDL_OPTIONS = {
 # Exporte os cookies do navegador para um cookies.txt (veja o README).
 COOKIES_FILE = os.getenv("YTDLP_COOKIES_FILE", "cookies.txt")
 if os.path.exists(COOKIES_FILE):
-    YTDL_OPTIONS["cookiefile"] = COOKIES_FILE
+    # O yt-dlp grava os cookies atualizados de volta no arquivo, mas no
+    # Render os Secret Files (/etc/secrets) são somente leitura — por
+    # isso trabalhamos sempre com uma cópia gravável
+    try:
+        COPIA_COOKIES = "cookies-ativos.txt"
+        shutil.copyfile(COOKIES_FILE, COPIA_COOKIES)
+        YTDL_OPTIONS["cookiefile"] = COPIA_COOKIES
+    except OSError:
+        YTDL_OPTIONS["cookiefile"] = COOKIES_FILE
+    print(f"🍪 Cookies do YouTube carregados de: {COOKIES_FILE}")
+else:
+    print(
+        f"ℹ️  Sem cookies do YouTube (arquivo '{COOKIES_FILE}' não existe) — "
+        "necessário apenas se o YouTube bloquear o IP pedindo login"
+    )
 
 # Obs.: sem "-reconnect_at_eof" — ele faz o FFmpeg tentar reconectar no fim
 # do arquivo, o que atrasava vários segundos a troca para a próxima música
