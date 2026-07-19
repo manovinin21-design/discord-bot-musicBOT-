@@ -6,12 +6,8 @@ import discord
 from discord.ext import commands
 
 from config import KISS_GIFS, NAKANO_EMBEDS
-from utils import (
-    carregar_ships,
-    salvar_ships,
-    ships_do_servidor,
-    registrar_ship,
-)
+from database import db
+from utils import carregar_ships
 
 
 class Social(commands.Cog):
@@ -38,10 +34,8 @@ class Social(commands.Cog):
 
         porcentagem = random.randint(0, 100)
 
-        ships = carregar_ships()
         nome_ship = f"{user1.name} + {user2.name}"
-        registrar_ship(ships, ctx.guild.id, nome_ship, porcentagem)
-        salvar_ships(ships)
+        await db.registrar_ship(ctx.guild.id, nome_ship, porcentagem)
 
         if porcentagem >= 90:
             mensagem = "💖 Casal perfeito! Já podem ir pra cama!"
@@ -69,20 +63,42 @@ class Social(commands.Cog):
 
     @commands.command()
     async def topships(self, ctx: commands.Context):
-        """Mostra o ranking dos ships mais altos."""
-        ships = ships_do_servidor(carregar_ships(), ctx.guild.id)
+        """Mostra o ranking dos ships mais altos deste servidor."""
+        ranking = await db.top_ships(ctx.guild.id)
 
-        if not ships:
-            await ctx.send("💔 Ainda não existem ships registrados.")
+        if not ranking:
+            await ctx.send("💔 Ainda não existem ships neste servidor.")
             return
 
-        ranking = sorted(ships.items(), key=lambda x: x[1], reverse=True)
-
         mensagem = "💘 **Ranking dos Ships** 💘\n\n"
-        for i, (casal, porcentagem) in enumerate(ranking[:10], start=1):
-            mensagem += f"{i}. {casal} — ❤️ {porcentagem}%\n"
+        for i, linha in enumerate(ranking, start=1):
+            mensagem += f"{i}. {linha['nome']} — ❤️ {linha['porcentagem']}%\n"
 
         await ctx.send(mensagem)
+
+    @commands.command()
+    @commands.is_owner()
+    async def importships(self, ctx: commands.Context):
+        """Importa os ships antigos (globais) para este servidor (só o dono).
+
+        Antes os ships eram guardados sem separar por servidor; esse
+        comando traz os antigos para o servidor onde for usado.
+        """
+        antigos = {
+            nome: valor
+            for nome, valor in carregar_ships().items()
+            if isinstance(valor, int)
+        }
+
+        if not antigos:
+            await ctx.send("📭 Não existem ships antigos para importar.")
+            return
+
+        importados = await db.importar_ships(ctx.guild.id, antigos)
+        await ctx.send(
+            f"✅ {importados} ship(s) antigos importados para "
+            f"**{ctx.guild.name}**."
+        )
 
     @commands.command()
     async def kiss(self, ctx: commands.Context, membro: discord.Member):

@@ -5,48 +5,16 @@ from config import SHIPS_FILE
 
 
 def carregar_ships() -> dict:
-    """Carrega o arquivo de ships. Retorna dict vazio se não existir."""
+    """Carrega o ships.json antigo (hoje os ships moram no banco de dados).
+
+    Só é usado na migração e no !importships. Retorna dict vazio se o
+    arquivo não existir.
+    """
     try:
         with open(SHIPS_FILE, "r", encoding="utf-8") as arquivo:
             return json.load(arquivo)
     except (FileNotFoundError, json.JSONDecodeError):
         return {}
-
-
-def salvar_ships(dados: dict):
-    """Salva o dicionário de ships no arquivo."""
-    with open(SHIPS_FILE, "w", encoding="utf-8") as arquivo:
-        json.dump(dados, arquivo, indent=4, ensure_ascii=False)
-
-
-def ships_do_servidor(dados: dict, guild_id: int) -> dict:
-    """Retorna os ships de um servidor específico.
-
-    O ships.json antigo guardava tudo no nível raiz; o formato novo
-    separa por guild_id. Esta função junta os dois para não perder
-    os ships antigos.
-    """
-    resultado = {}
-
-    # Formato antigo: pares direto na raiz (valor é um número)
-    for chave, valor in dados.items():
-        if isinstance(valor, int):
-            resultado[chave] = valor
-
-    # Formato novo: sub-dicionário com a chave do servidor
-    por_guild = dados.get(str(guild_id))
-    if isinstance(por_guild, dict):
-        resultado.update(por_guild)
-
-    return resultado
-
-
-def registrar_ship(dados: dict, guild_id: int, nome_ship: str, porcentagem: int):
-    """Registra um ship no formato novo (separado por servidor)."""
-    chave = str(guild_id)
-    if not isinstance(dados.get(chave), dict):
-        dados[chave] = {}
-    dados[chave][nome_ship] = porcentagem
 
 
 def formatar_tempo(segundos: float) -> str:

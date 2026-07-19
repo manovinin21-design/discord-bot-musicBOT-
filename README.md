@@ -17,8 +17,9 @@ O **JotaBeEli** é um bot de Discord completo, desenvolvido inteiramente em Pyth
 - 💬 **Mensagens automáticas** — boas-vindas, despedidas e agradecimento de boost em embeds com a foto do membro, cada uma ativada no canal que você escolher
 - 📊 **Sistema de XP** — os membros ganham XP conversando (com cooldown anti-spam), sobem de nível e disputam o ranking do servidor
 - 🛡️ **Moderação completa** — mute com tempo, ban/kick, advertências salvas em banco de dados, bloqueio de canais individual ou em massa e limpeza de mensagens
-- 💘 **Social** — calculadora de ship com ranking dos casais, beijos com GIFs e mais
+- 💘 **Social** — calculadora de ship com ranking dos casais **por servidor**, beijos com GIFs e mais
 - 🔒 **Robusto** — tudo separado por servidor, banco de dados com recuperação automática de corrupção e reconexão do player em quedas de rede
+- ☁️ **Pronto para hospedagem** — suporta Postgres externo (`DATABASE_URL`) para o XP, ships e configurações **nunca resetarem**, mesmo em hospedagens de disco efêmero como o Render
 
 ---
 
@@ -38,9 +39,20 @@ O **JotaBeEli** é um bot de Discord completo, desenvolvido inteiramente em Pyth
 | `!kiss <usuário>` | Beija alguém (com GIF) |
 | `!rank [usuário]` | Mostra o nível e XP de alguém |
 | `!leaderboard` | Ranking de XP do servidor |
+| `!reportbug <mensagem>` | Reporta um bug para o dono do bot |
 | `!ajuda` | Lista todos os comandos |
 
 *Dizem que existem comandos secretos... 👀*
+
+### 👑 Comandos do dono do bot
+
+| Comando | O que faz |
+|---|---|
+| `!a <mensagem>` | Envia um anúncio para todos os servidores |
+| `!servidores` | Lista os servidores em que o bot está |
+| `!rules` | Mostra as regras do bot |
+| `!showreports` | Mostra os reports de bug enviados com `!reportbug` |
+| `!importships` | Importa os ships antigos (da época em que eram globais) para o servidor atual |
 
 ### 🎵 Música
 
@@ -100,9 +112,9 @@ Embeds de boas-vindas, saída e boost com a foto do membro. **Elas vêm desativa
 
 - [Python](https://www.python.org/) 3.11+
 - [discord.py](https://discordpy.readthedocs.io/) — conexão com o Discord
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — busca e extração de áudio do YouTube
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — busca e extração de áudio do YouTube (com o resolvedor de desafios EJS + [Deno](https://deno.com/))
 - [FFmpeg](https://ffmpeg.org/) — processamento do áudio
-- SQLite — banco de dados de XP, advertências e configuração das mensagens automáticas (nativo do Python, sem instalar nada)
+- SQLite **ou** Postgres — banco de dados de XP, ships, advertências e mensagens automáticas. SQLite (nativo, zero configuração) rodando local; Postgres externo quando a variável `DATABASE_URL` existe
 - [LRCLIB](https://lrclib.net/) — busca de letras de música para o `!lyrics` (API gratuita, sem chave)
 
 ---
@@ -177,7 +189,9 @@ musicBOT/
 ├── social.py       # 💘 Ship, kiss e afins
 ├── fun.py          # 🎮 Comandos de diversão
 ├── admin.py        # ⚙️ Ajuda e comandos do dono
-└── ships.json      # Histórico dos ships calculados
+├── Dockerfile      # Imagem para hospedagem (ffmpeg + libopus + deno)
+├── render.yaml     # Blueprint do Render (cria o serviço automaticamente)
+└── ships.json      # Histórico antigo dos ships (hoje eles moram no banco)
 ```
 
 Cada módulo é um *cog* independente do discord.py — para criar um comando novo, basta adicioná-lo ao módulo do tema (ou criar um módulo novo e registrá-lo na lista `COGS` do `main.py`).
@@ -187,6 +201,27 @@ Cada módulo é um *cog* independente do discord.py — para criar um comando no
 ## ☁️ Rodando 24 horas
 
 O bot roda em qualquer máquina com Python + FFmpeg: um PC que fica ligado, um Raspberry Pi ou uma VM na nuvem (o free tier da [Oracle Cloud](https://www.oracle.com/cloud/free/) é uma boa opção gratuita). Só lembre de criar o `.env` na máquina nova — ele não vai junto no clone, de propósito.
+
+### Hospedando no Render (plano gratuito)
+
+O projeto já vem com `Dockerfile` e `render.yaml` prontos:
+
+1. No painel do [Render](https://render.com/), clique em **New + → Blueprint** e escolha este repositório
+2. Preencha as variáveis pedidas:
+   - `DISCORD_TOKEN` — o token do seu bot
+   - `DATABASE_URL` — a URL de um Postgres externo (**muito importante**, veja abaixo)
+
+> ⚠️ **O disco do plano gratuito do Render é apagado a cada restart/deploy.** Sem um banco externo, XP, ships, advertências e mensagens automáticas voltam do zero toda hora. A solução é gratuita: crie um Postgres no [Neon](https://neon.tech/) ou no [Supabase](https://supabase.com/) (os dois têm plano free permanente), copie a *connection string* (`postgresql://usuario:senha@host/banco`) e cole na variável `DATABASE_URL` do serviço no Render. O bot cria as tabelas sozinho na primeira execução. Rodando no PC, nada muda: sem `DATABASE_URL`, ele usa o `database.db` local como sempre.
+
+### YouTube bloqueado ("Sign in to confirm you're not a bot")
+
+O YouTube costuma bloquear IPs de hospedagens (Render, AWS etc.) pedindo login. Se as músicas falharem com essa mensagem:
+
+1. No seu navegador (logado no YouTube), exporte os cookies com uma extensão como *Get cookies.txt LOCALLY*
+2. Salve o arquivo como `cookies.txt` na pasta do bot — ou, no Render, adicione-o em **Environment → Secret Files** com o nome `cookies.txt`
+3. Reinicie o bot — o `config.py` detecta o arquivo automaticamente (o caminho também pode ser customizado com a variável `YTDLP_COOKIES_FILE`)
+
+> 💡 O `cookies.txt` está no `.gitignore`: ele dá acesso à sua conta do YouTube e **nunca** deve ser commitado.
 
 ---
 

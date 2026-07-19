@@ -1,6 +1,7 @@
 """Main entry point for the Discord bot."""
 
 import sys
+import traceback
 
 # O console do Windows usa cp1252 por padrão e quebra ao imprimir emojis
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -68,11 +69,16 @@ async def on_command_error(ctx: commands.Context, error: Exception):
             "❌ Não tenho permissão suficiente para fazer isso. "
             "Confira o meu cargo e as permissões do canal."
         )
+    elif isinstance(error, commands.BotMissingPermissions):
+        await ctx.send(
+            "❌ Estou sem as permissões necessárias para fazer isso. "
+            "Confira o meu cargo e as permissões do canal."
+        )
     elif isinstance(error, commands.CommandNotFound):
         pass  # Silently ignore unknown commands
     else:
         print(f"❌ Error in command {ctx.command}: {error}")
-        raise error
+        traceback.print_exception(type(error), error, error.__traceback__)
 
 
 COGS = ["admin", "eventos", "fun", "moderation", "music", "social", "xp"]

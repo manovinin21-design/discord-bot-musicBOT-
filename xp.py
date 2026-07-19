@@ -64,9 +64,12 @@ class XP(commands.Cog):
         await db.set_user_xp(message.author.id, message.guild.id, xp, level)
 
         if subiu_de_nivel:
-            await message.channel.send(
-                f"🎉 {message.author.mention} subiu para o nível **{level}**!"
-            )
+            try:
+                await message.channel.send(
+                    f"🎉 {message.author.mention} subiu para o nível **{level}**!"
+                )
+            except discord.HTTPException:
+                pass  # sem permissão de falar no canal — o XP já foi salvo
 
     @commands.command()
     async def rank(

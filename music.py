@@ -62,6 +62,7 @@ class Music(commands.Cog):
         self.tocando_agora = {}   # guild_id -> {"musica": Musica, "inicio": float}
         self.locks = {}           # guild_id -> asyncio.Lock (evita play duplo)
         self.ignorar_fim = set()  # guilds cujo próximo "fim" é um seek, não um fim
+        self.ultimo_erro = None   # último erro do yt-dlp (para avisar o usuário)
 
     async def cog_check(self, ctx: commands.Context) -> bool:
         """Todos os comandos de música precisam de um servidor (guild_id)."""
@@ -111,15 +112,16 @@ class Music(commands.Cog):
 
     async def buscar_info(self, pesquisa: str) -> Optional[dict]:
         """Busca as informações de uma música no yt-dlp. Retorna None se falhar."""
+        self.ultimo_erro = None
         try:
             info = await asyncio.to_thread(
                 ytdl.extract_info, pesquisa, download=False
             )
         except Exception as e:
             print(f"❌ Erro ao buscar música: {e}")
+            self.ultimo_erro = str(e)
             return None
 
-        # ignoreerrors=True faz o yt-dlp retornar None em vez de lançar erro
         if info is None:
             return None
 
@@ -130,6 +132,31 @@ class Music(commands.Cog):
             info = entries[0]
 
         return info
+
+    def mensagem_falha(self, pesquisa: str) -> str:
+        """Explica no Discord por que a busca falhou, quando dá para saber."""
+        erro = self.ultimo_erro or ""
+
+        if "Sign in to confirm you're not a bot" in erro or "cookies" in erro:
+            return (
+                "❌ O YouTube bloqueou o IP deste servidor (pede login). "
+                "O dono do bot precisa configurar um `cookies.txt` — "
+                "veja a seção **YouTube bloqueado** do README."
+            )
+        if "confirm your age" in erro or "age" in erro.lower():
+            return (
+                f"❌ **{pesquisa}** tem restrição de idade e o YouTube "
+                "não deixa tocar sem login."
+            )
+        if "Video unavailable" in erro or "Private video" in erro:
+            return f"❌ Esse vídeo está indisponível ou privado: **{pesquisa}**"
+
+        mensagem = f"❌ Não consegui encontrar/tocar: **{pesquisa}**"
+        if erro:
+            # Mostra um resumo do erro real para facilitar o !reportbug
+            resumo = erro.replace("ERROR: ", "").split("\n")[0][:200]
+            mensagem += f"\n(`{resumo}`)"
+        return mensagem
 
     @staticmethod
     def _expira_stream(stream_url: Optional[str]) -> float:
@@ -221,7 +248,10 @@ class Music(commands.Cog):
                 # O link direto do áudio expira; o resolver reaproveita o
                 # que já temos e só busca de novo quando é preciso
                 if not await self.resolver_stream(musica):
-                    await ctx.send(f"❌ Não consegui tocar: **{musica.titulo}**")
+                    await ctx.send(
+                        f"❌ Não consegui tocar: **{musica.titulo}**\n"
+                        + self.mensagem_falha(musica.titulo)
+                    )
                     continue  # tenta a próxima da fila
 
                 # O bot pode ter sido desconectado durante a busca
@@ -235,7 +265,8 @@ class Music(commands.Cog):
 
                 self.tocando_agora[guild_id] = {
                     "musica": musica,
-                    "inicio": time.time()
+                    "inicio": time.time(),
+                    "pausado_em": None  # marca quando a música foi pausada
                 }
 
                 historico = self.historico_de(guild_id)
@@ -297,7 +328,14 @@ class Music(commands.Cog):
             return False
 
         atual["inicio"] = time.time() - segundos
+        atual["pausado_em"] = None  # o play() acima retoma a música
         return True
+
+    @staticmethod
+    def tempo_decorrido(atual: dict) -> float:
+        """Quanto tempo da música já tocou, descontando o tempo pausado."""
+        agora = atual.get("pausado_em") or time.time()
+        return agora - atual["inicio"]
 
     # -------------------- Letra / legendas (!lyrics) --------------------
 
@@ -461,7 +499,7 @@ class Music(commands.Cog):
             info = await self.buscar_info(pesquisa)
 
         if info is None:
-            await ctx.send(f"❌ Não encontrei resultados para: **{pesquisa}**")
+            await ctx.send(self.mensagem_falha(pesquisa))
             return
 
         musica = Musica(
@@ -653,7 +691,7 @@ class Music(commands.Cog):
             return
 
         musica = atual["musica"]
-        decorrido = time.time() - atual["inicio"]
+        decorrido = self.tempo_decorrido(atual)
 
         embed = discord.Embed(
             title="🎵 Música atual",
@@ -692,7 +730,7 @@ class Music(commands.Cog):
 
         if atual:
             musica = atual["musica"]
-            decorrido = time.time() - atual["inicio"]
+            decorrido = self.tempo_decorrido(atual)
             if musica.duracao:
                 progresso = (
                     f"{formatar_tempo(decorrido)} / "
@@ -789,6 +827,9 @@ class Music(commands.Cog):
 
         if ctx.voice_client.is_playing():
             ctx.voice_client.pause()
+            atual = self.tocando_agora.get(ctx.guild.id)
+            if atual:
+                atual["pausado_em"] = time.time()
             await ctx.send("⏸️ Música pausada.")
         else:
             await ctx.send("Não há nenhuma música tocando.")
@@ -802,6 +843,11 @@ class Music(commands.Cog):
 
         if ctx.voice_client.is_paused():
             ctx.voice_client.resume()
+            atual = self.tocando_agora.get(ctx.guild.id)
+            if atual and atual.get("pausado_em"):
+                # Empurra o "início" para frente: o tempo pausado não conta
+                atual["inicio"] += time.time() - atual["pausado_em"]
+                atual["pausado_em"] = None
             await ctx.send("▶️ Música retomada.")
         else:
             await ctx.send("Nenhuma música está pausada.")

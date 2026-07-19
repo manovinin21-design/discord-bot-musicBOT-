@@ -3,6 +3,9 @@ __pycache__/
 .env
 token.txt
 database.db
+database.db-wal
+database.db-shm
 *.bak
+cookies.txt
 .git/
 .claude/

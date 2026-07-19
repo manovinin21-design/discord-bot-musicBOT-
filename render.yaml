@@ -9,3 +9,6 @@ services:
     envVars:
       - key: DISCORD_TOKEN
         sync: false  # o Render pede o valor na hora de criar o serviço
+      - key: DATABASE_URL
+        sync: false  # URL de um Postgres externo (Neon/Supabase) — sem
+                     # ele o XP e as configurações somem a cada restart
