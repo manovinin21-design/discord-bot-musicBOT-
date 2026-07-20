@@ -1,5 +1,3 @@
-"""Cog de moderação: punições, bloqueio de canais e advertências."""
-
 import asyncio
 from datetime import timedelta
 
@@ -10,13 +8,11 @@ from database import db
 
 
 class Moderation(commands.Cog):
-    """Comandos de moderação."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
     async def cog_check(self, ctx: commands.Context) -> bool:
-        """Moderação só faz sentido dentro de um servidor (guild_id)."""
         if ctx.guild is None:
             raise commands.NoPrivateMessage()
         return True
@@ -27,12 +23,11 @@ class Moderation(commands.Cog):
         self, ctx: commands.Context, membro: discord.Member,
         minutos: int, *, motivo: str = "Nenhum motivo informado"
     ):
-        """Silencia um usuário por X minutos."""
         if minutos < 1:
             await ctx.send("❌ Informe uma quantidade de minutos maior que 0.")
             return
 
-        # Timeout do Discord tem limite de 28 dias
+
         if minutos > 40320:
             await ctx.send("❌ O tempo máximo de mute é 28 dias (40320 minutos).")
             return
@@ -46,14 +41,12 @@ class Moderation(commands.Cog):
     @commands.command()
     @commands.has_permissions(moderate_members=True)
     async def unmute(self, ctx: commands.Context, membro: discord.Member):
-        """Remove o silêncio de um usuário."""
         await membro.timeout(None)
         await ctx.send(f"🔊 {membro.mention} pode falar novamente.")
 
     @commands.command()
     @commands.has_permissions(manage_channels=True)
     async def lock(self, ctx: commands.Context):
-        """Bloqueia o canal de texto atual."""
         overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
         overwrite.send_messages = False
         await ctx.channel.set_permissions(
@@ -64,7 +57,6 @@ class Moderation(commands.Cog):
     @commands.command()
     @commands.has_permissions(manage_channels=True)
     async def unlock(self, ctx: commands.Context):
-        """Desbloqueia o canal de texto atual."""
         overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
         overwrite.send_messages = True
         await ctx.channel.set_permissions(
@@ -75,7 +67,6 @@ class Moderation(commands.Cog):
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def lockall(self, ctx: commands.Context):
-        """Bloqueia todos os canais de texto."""
         quantidade = 0
         for canal in ctx.guild.text_channels:
             overwrite = canal.overwrites_for(ctx.guild.default_role)
@@ -90,7 +81,6 @@ class Moderation(commands.Cog):
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def unlockall(self, ctx: commands.Context):
-        """Desbloqueia todos os canais de texto."""
         quantidade = 0
         for canal in ctx.guild.text_channels:
             overwrite = canal.overwrites_for(ctx.guild.default_role)
@@ -108,7 +98,6 @@ class Moderation(commands.Cog):
         self, ctx: commands.Context, membro: discord.Member,
         *, motivo: str = "Nenhum motivo informado"
     ):
-        """Bane um usuário."""
         if membro == ctx.author:
             await ctx.send("❌ Você não pode banir a si mesmo.")
             return
@@ -119,12 +108,11 @@ class Moderation(commands.Cog):
     @commands.command()
     @commands.has_permissions(ban_members=True)
     async def unban(self, ctx: commands.Context, *, usuario: str):
-        """Remove o banimento de um usuário (por ID ou nome)."""
         banidos = [entry async for entry in ctx.guild.bans()]
 
         for banido in banidos:
             user = banido.user
-            # Aceita ID ou nome de usuário (Discord não usa mais nome#0000)
+
             if usuario in (str(user.id), user.name, str(user)):
                 await ctx.guild.unban(user)
                 await ctx.send(f"✅ {user} foi desbanido.")
@@ -138,7 +126,6 @@ class Moderation(commands.Cog):
         self, ctx: commands.Context, membro: discord.Member,
         *, motivo: str = "Nenhum motivo informado"
     ):
-        """Expulsa um usuário."""
         if membro == ctx.author:
             await ctx.send("❌ Você não pode expulsar a si mesmo.")
             return
@@ -149,7 +136,6 @@ class Moderation(commands.Cog):
     @commands.command()
     @commands.has_permissions(manage_messages=True)
     async def clear(self, ctx: commands.Context, quantidade: int):
-        """Apaga mensagens do canal (máximo 100 por vez)."""
         if quantidade < 1:
             await ctx.send("Informe uma quantidade maior que 0.")
             return
@@ -170,7 +156,6 @@ class Moderation(commands.Cog):
         self, ctx: commands.Context, membro: discord.Member,
         *, motivo: str = "Nenhum motivo informado"
     ):
-        """Dá uma advertência a um usuário."""
         if membro == ctx.author:
             await ctx.send("❌ Você não pode advertir a si mesmo.")
             return
@@ -209,7 +194,6 @@ class Moderation(commands.Cog):
 
     @commands.command()
     async def warnings(self, ctx: commands.Context, membro: discord.Member):
-        """Mostra as advertências de um usuário."""
         motivos = await db.get_warnings(membro.id, ctx.guild.id)
 
         if not motivos:
@@ -225,7 +209,6 @@ class Moderation(commands.Cog):
     @commands.command()
     @commands.has_permissions(moderate_members=True)
     async def clearwarns(self, ctx: commands.Context, membro: discord.Member):
-        """Remove todas as advertências de um usuário."""
         sucesso = await db.clear_warnings(membro.id, ctx.guild.id)
         if sucesso:
             await ctx.send(f"🗑️ Advertências de {membro.mention} removidas.")
@@ -234,5 +217,4 @@ class Moderation(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
-    """Setup do cog Moderation."""
     await bot.add_cog(Moderation(bot))

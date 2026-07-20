@@ -1,5 +1,3 @@
-"""Cog de XP: ganho por mensagem, rank e leaderboard."""
-
 import random
 import time
 
@@ -11,30 +9,26 @@ from database import db
 
 
 def xp_para_proximo_nivel(level: int) -> int:
-    """XP necessário para subir do nível atual para o próximo."""
     return level * 100
 
 
 class XP(commands.Cog):
-    """Sistema de XP e níveis."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.ultimo_ganho = {}  # (user_id, guild_id) -> timestamp
+        self.ultimo_ganho = {}
 
     async def cog_check(self, ctx: commands.Context) -> bool:
-        """XP é separado por servidor: os comandos precisam de um guild_id."""
         if ctx.guild is None:
             raise commands.NoPrivateMessage()
         return True
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        """Dá XP por mensagem, respeitando o cooldown."""
         if message.author.bot or message.guild is None:
             return
 
-        # Mensagens que são comandos não dão XP
+
         ctx = await self.bot.get_context(message)
         if ctx.valid:
             return
@@ -69,13 +63,12 @@ class XP(commands.Cog):
                     f"🎉 {message.author.mention} subiu para o nível **{level}**!"
                 )
             except discord.HTTPException:
-                pass  # sem permissão de falar no canal — o XP já foi salvo
+                pass
 
     @commands.command()
     async def rank(
         self, ctx: commands.Context, membro: discord.Member = None
     ):
-        """Mostra o rank de XP de um usuário."""
         membro = membro or ctx.author
 
         dados = await db.get_user_xp(membro.id, ctx.guild.id)
@@ -98,7 +91,6 @@ class XP(commands.Cog):
 
     @commands.command(aliases=["lb", "top"])
     async def leaderboard(self, ctx: commands.Context):
-        """Mostra o ranking de XP do servidor."""
         ranking = await db.get_leaderboard(ctx.guild.id)
 
         if not ranking:
@@ -128,7 +120,6 @@ class XP(commands.Cog):
     async def addxp(
         self, ctx: commands.Context, membro: discord.Member, quantidade: int
     ):
-        """Adiciona XP a um usuário."""
         if quantidade < 1:
             await ctx.send("❌ Informe uma quantidade maior que 0.")
             return
@@ -155,7 +146,6 @@ class XP(commands.Cog):
     async def removexp(
         self, ctx: commands.Context, membro: discord.Member, quantidade: int
     ):
-        """Remove XP de um usuário."""
         if quantidade < 1:
             await ctx.send("❌ Informe uma quantidade maior que 0.")
             return
@@ -168,7 +158,7 @@ class XP(commands.Cog):
         xp, level = dados["xp"], dados["level"]
         xp -= quantidade
 
-        # Desce de nível se o XP ficar negativo
+
         while xp < 0 and level > 1:
             level -= 1
             xp += xp_para_proximo_nivel(level)
@@ -183,5 +173,4 @@ class XP(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
-    """Setup do cog XP."""
     await bot.add_cog(XP(bot))

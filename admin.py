@@ -1,17 +1,13 @@
-"""Administrative commands cog."""
-
 import discord
 from discord.ext import commands
 
 from database import db
 
-# Tamanho máximo de um report — precisa caber no campo de embed do
-# !showreports (limite de 1024 caracteres, contando a linha da data)
+
 LIMITE_TEXTO_REPORT = 900
 
 
 class Admin(commands.Cog):
-    """Administrative commands."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -19,7 +15,6 @@ class Admin(commands.Cog):
     @commands.command(name="a")
     @commands.is_owner()
     async def anunciar(self, ctx: commands.Context, *, mensagem: str):
-        """Envia um anúncio para todos os servidores do bot (só o dono)."""
         embed = discord.Embed(
             title="📢 Anúncio",
             description=mensagem,
@@ -55,7 +50,6 @@ class Admin(commands.Cog):
     @commands.command(name="servidores")
     @commands.is_owner()
     async def servidores(self, ctx: commands.Context):
-        """Lista os servidores em que o bot está (só o dono)."""
         guilds = sorted(
             self.bot.guilds,
             key=lambda g: g.member_count or 0,
@@ -84,11 +78,6 @@ class Admin(commands.Cog):
 
     @staticmethod
     def escolher_canal(guild: discord.Guild):
-        """Escolhe o melhor canal para o anúncio em um servidor.
-
-        Preferência: canal de sistema (o das mensagens de boas-vindas);
-        senão, o primeiro canal de texto onde o bot pode falar.
-        """
         canal = guild.system_channel
         if canal and canal.permissions_for(guild.me).send_messages:
             return canal
@@ -102,7 +91,6 @@ class Admin(commands.Cog):
     @commands.command(name="rules", aliases=["regras"])
     @commands.is_owner()
     async def rules(self, ctx: commands.Context):
-        """Mostra as regras do bot (só o dono)."""
         embed = discord.Embed(
             title="📜 Regras do JotaBeEli",
             description=(
@@ -166,7 +154,6 @@ class Admin(commands.Cog):
     @commands.command()
     @commands.cooldown(1, 60, commands.BucketType.user)
     async def reportbug(self, ctx: commands.Context, *, texto: str):
-        """Envia um report de bug para o dono do bot."""
         texto = texto.strip()
         if not texto:
             await ctx.send(
@@ -199,7 +186,6 @@ class Admin(commands.Cog):
     @commands.command()
     @commands.is_owner()
     async def showreports(self, ctx: commands.Context):
-        """Mostra os reports de bug armazenados (só o dono)."""
         reports = await db.get_bug_reports()
 
         if not reports:
@@ -226,8 +212,7 @@ class Admin(commands.Cog):
                 texto = texto[:LIMITE_TEXTO_REPORT] + "…"
             valor = f"{texto}\n🕒 <t:{report['created_at']}:f>"
 
-            # Limites do Discord: 25 campos e 6000 caracteres por embed —
-            # quando estourar, continua em um embed novo
+
             if (
                 len(embed.fields) >= 25
                 or total_chars + len(nome) + len(valor) > 5500
@@ -247,7 +232,6 @@ class Admin(commands.Cog):
 
     @commands.command()
     async def ajuda(self, ctx: commands.Context):
-        """Mostra todos os comandos disponíveis."""
         embed = discord.Embed(
             title="📖 Central de Ajuda — JotaBeEli",
             description=(
@@ -340,5 +324,4 @@ class Admin(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
-    """Setup the Admin cog."""
     await bot.add_cog(Admin(bot))

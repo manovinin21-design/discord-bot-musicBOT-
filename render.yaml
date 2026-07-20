@@ -1,5 +1,3 @@
-# Blueprint do Render: cria o serviço do bot automaticamente.
-# No painel do Render: New + > Blueprint > escolher este repositório.
 services:
   - type: web
     name: jotabeeli
@@ -8,7 +6,6 @@ services:
     healthCheckPath: /
     envVars:
       - key: DISCORD_TOKEN
-        sync: false  # o Render pede o valor na hora de criar o serviço
+        sync: false
       - key: DATABASE_URL
-        sync: false  # URL de um Postgres externo (Neon/Supabase) — sem
-                     # ele o XP e as configurações somem a cada restart
+        sync: false

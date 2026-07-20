@@ -1,9 +1,3 @@
-"""Cog de eventos: mensagens automáticas de boas-vindas, saída e boost.
-
-As mensagens só funcionam depois de ativadas com !addmsgin, !addmsgout e
-!addmsgboost — cada servidor escolhe (ou não) os seus canais.
-"""
-
 import discord
 from discord.ext import commands
 
@@ -27,23 +21,17 @@ COMANDOS_DESATIVAR = {
 
 
 class Eventos(commands.Cog):
-    """Mensagens automáticas do servidor."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
     async def cog_check(self, ctx: commands.Context) -> bool:
-        """A configuração das mensagens é por servidor: precisa de um guild_id."""
         if ctx.guild is None:
             raise commands.NoPrivateMessage()
         return True
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
 
     async def canal_configurado(self, guild: discord.Guild, tipo: str):
-        """Retorna o canal configurado para um tipo de mensagem, se utilizável."""
         canal_id = await db.get_canal_mensagem(guild.id, tipo)
         if not canal_id:
             return None
@@ -56,7 +44,6 @@ class Eventos(commands.Cog):
     async def ativar(
         self, ctx: commands.Context, tipo: str, canal: discord.TextChannel
     ):
-        """Ativa um tipo de mensagem automática no canal informado."""
         if not canal.permissions_for(ctx.guild.me).send_messages:
             await ctx.send(
                 f"❌ Eu não tenho permissão para enviar mensagens em "
@@ -82,7 +69,6 @@ class Eventos(commands.Cog):
         await ctx.send(embed=embed)
 
     async def desativar(self, ctx: commands.Context, tipo: str):
-        """Desativa um tipo de mensagem automática."""
         if await db.remover_canal_mensagem(ctx.guild.id, tipo):
             await ctx.send(
                 f"🗑️ Mensagens de **{NOMES_TIPO[tipo]}** desativadas."
@@ -92,16 +78,12 @@ class Eventos(commands.Cog):
                 f"❌ As mensagens de **{NOMES_TIPO[tipo]}** não estavam ativadas."
             )
 
-    # ------------------------------------------------------------------
-    # Comandos de configuração
-    # ------------------------------------------------------------------
 
     @commands.command()
     @commands.has_permissions(manage_guild=True)
     async def addmsgin(
         self, ctx: commands.Context, canal: discord.TextChannel
     ):
-        """Ativa as mensagens de boas-vindas no canal informado."""
         await self.ativar(ctx, "entrada", canal)
 
     @commands.command()
@@ -109,7 +91,6 @@ class Eventos(commands.Cog):
     async def addmsgout(
         self, ctx: commands.Context, canal: discord.TextChannel
     ):
-        """Ativa as mensagens de saída no canal informado."""
         await self.ativar(ctx, "saida", canal)
 
     @commands.command()
@@ -117,31 +98,26 @@ class Eventos(commands.Cog):
     async def addmsgboost(
         self, ctx: commands.Context, canal: discord.TextChannel
     ):
-        """Ativa as mensagens de boost no canal informado."""
         await self.ativar(ctx, "boost", canal)
 
     @commands.command()
     @commands.has_permissions(manage_guild=True)
     async def delmsgin(self, ctx: commands.Context):
-        """Desativa as mensagens de boas-vindas."""
         await self.desativar(ctx, "entrada")
 
     @commands.command()
     @commands.has_permissions(manage_guild=True)
     async def delmsgout(self, ctx: commands.Context):
-        """Desativa as mensagens de saída."""
         await self.desativar(ctx, "saida")
 
     @commands.command()
     @commands.has_permissions(manage_guild=True)
     async def delmsgboost(self, ctx: commands.Context):
-        """Desativa as mensagens de boost."""
         await self.desativar(ctx, "boost")
 
     @commands.command()
     @commands.has_permissions(manage_guild=True)
     async def msgconfig(self, ctx: commands.Context):
-        """Mostra os canais configurados para as mensagens automáticas."""
         embed = discord.Embed(
             title="⚙️ Mensagens automáticas",
             description="Configuração atual deste servidor:",
@@ -165,13 +141,9 @@ class Eventos(commands.Cog):
         )
         await ctx.send(embed=embed)
 
-    # ------------------------------------------------------------------
-    # Eventos
-    # ------------------------------------------------------------------
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
-        """Envia a mensagem de boas-vindas, se ativada."""
         canal = await self.canal_configurado(member.guild, "entrada")
         if not canal:
             return
@@ -197,7 +169,6 @@ class Eventos(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
-        """Envia a mensagem de saída, se ativada."""
         canal = await self.canal_configurado(member.guild, "saida")
         if not canal:
             return
@@ -224,7 +195,6 @@ class Eventos(commands.Cog):
     async def on_member_update(
         self, before: discord.Member, after: discord.Member
     ):
-        """Detecta um boost novo e envia a mensagem, se ativada."""
         if before.premium_since is not None or after.premium_since is None:
             return
 
@@ -254,5 +224,4 @@ class Eventos(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
-    """Setup do cog Eventos."""
     await bot.add_cog(Eventos(bot))

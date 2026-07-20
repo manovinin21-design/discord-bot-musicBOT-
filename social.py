@@ -1,5 +1,3 @@
-"""Cog social: ships, kiss e as Nakano."""
-
 import random
 
 import discord
@@ -11,13 +9,11 @@ from utils import carregar_ships
 
 
 class Social(commands.Cog):
-    """Comandos de interação social."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
     async def cog_check(self, ctx: commands.Context) -> bool:
-        """Ships e afins são separados por servidor: precisam de um guild_id."""
         if ctx.guild is None:
             raise commands.NoPrivateMessage()
         return True
@@ -27,7 +23,6 @@ class Social(commands.Cog):
         self, ctx: commands.Context,
         user1: discord.Member, user2: discord.Member
     ):
-        """Calcula a compatibilidade entre dois usuários."""
         if user1 == user2:
             await ctx.send("voce ta shippando voce com a sua propria mão?")
             return
@@ -63,7 +58,6 @@ class Social(commands.Cog):
 
     @commands.command()
     async def topships(self, ctx: commands.Context):
-        """Mostra o ranking dos ships mais altos deste servidor."""
         ranking = await db.top_ships(ctx.guild.id)
 
         if not ranking:
@@ -79,11 +73,6 @@ class Social(commands.Cog):
     @commands.command()
     @commands.is_owner()
     async def importships(self, ctx: commands.Context):
-        """Importa os ships antigos (globais) para este servidor (só o dono).
-
-        Antes os ships eram guardados sem separar por servidor; esse
-        comando traz os antigos para o servidor onde for usado.
-        """
         antigos = {
             nome: valor
             for nome, valor in carregar_ships().items()
@@ -102,7 +91,6 @@ class Social(commands.Cog):
 
     @commands.command()
     async def kiss(self, ctx: commands.Context, membro: discord.Member):
-        """Beija um usuário."""
         if membro == ctx.author:
             await ctx.send("beijando o espelho? tá tudo bem em casa?")
             return
@@ -119,7 +107,6 @@ class Social(commands.Cog):
 
     @commands.command()
     async def nakano(self, ctx: commands.Context):
-        """Sorteia uma das quíntuplas."""
         await ctx.send(
             f"O USUARIO, {ctx.author.mention} ATIVOU O COMANDO SECRETO!"
             )
@@ -135,5 +122,4 @@ class Social(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
-    """Setup do cog Social."""
     await bot.add_cog(Social(bot))

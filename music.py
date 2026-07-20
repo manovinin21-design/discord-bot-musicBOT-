@@ -1,5 +1,3 @@
-"""Cog de música: fila, player e controles de voz."""
-
 import asyncio
 import re
 import time
@@ -18,13 +16,13 @@ ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
 
 COR_MUSICA = discord.Color.from_rgb(88, 101, 242)
 
-# Quantas músicas já tocadas ficam guardadas por servidor (!replay/!replayall)
+
 LIMITE_HISTORICO = 200
 
-# Idiomas preferidos ao procurar legendas no vídeo (!lyrics)
+
 IDIOMAS_LEGENDA = ["pt", "pt-BR", "pt-PT", "en", "en-US"]
 
-# Trechos removidos do título ao procurar a letra da música
+
 RUIDO_TITULO = re.compile(
     r"[\(\[\{][^\)\]\}]*[\)\]\}]"
     r"|(?i:official|oficial|clipe|video|vídeo|lyrics?|audio|áudio"
@@ -34,15 +32,14 @@ RUIDO_TITULO = re.compile(
 
 @dataclass
 class Musica:
-    """Uma música da fila, já com as informações resolvidas."""
 
     titulo: str
-    url: str                      # link da página (usado para tocar depois)
-    duracao: Optional[int]        # em segundos; None para lives
+    url: str
+    duracao: Optional[int]
     thumb: Optional[str]
     pedido_por: str
-    stream_url: Optional[str] = None   # link direto do áudio (expira)
-    stream_expira: float = 0.0         # quando o link direto deixa de valer
+    stream_url: Optional[str] = None
+    stream_expira: float = 0.0
 
     @property
     def duracao_texto(self) -> str:
@@ -52,54 +49,44 @@ class Musica:
 
 
 class Music(commands.Cog):
-    """Comandos de música."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.filas = {}           # guild_id -> lista de Musica
-        self.ultima_musica = {}   # guild_id -> última Musica tocada
-        self.historicos = {}      # guild_id -> Musicas já tocadas, em ordem
-        self.tocando_agora = {}   # guild_id -> {"musica": Musica, "inicio": float}
-        self.locks = {}           # guild_id -> asyncio.Lock (evita play duplo)
-        self.ignorar_fim = set()  # guilds cujo próximo "fim" é um seek, não um fim
-        self.ultimo_erro = None   # último erro do yt-dlp (para avisar o usuário)
+        self.filas = {}
+        self.ultima_musica = {}
+        self.historicos = {}
+        self.tocando_agora = {}
+        self.locks = {}
+        self.ignorar_fim = set()
+        self.ultimo_erro = None
 
     async def cog_check(self, ctx: commands.Context) -> bool:
-        """Todos os comandos de música precisam de um servidor (guild_id)."""
         if ctx.guild is None:
             raise commands.NoPrivateMessage()
         return True
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
 
     def fila_de(self, guild_id: int) -> list:
-        """Retorna (criando se preciso) a fila do servidor."""
         if guild_id not in self.filas:
             self.filas[guild_id] = []
         return self.filas[guild_id]
 
     def historico_de(self, guild_id: int) -> list:
-        """Retorna (criando se preciso) o histórico de músicas do servidor."""
         if guild_id not in self.historicos:
             self.historicos[guild_id] = []
         return self.historicos[guild_id]
 
     def lock_de(self, guild_id: int) -> asyncio.Lock:
-        """Retorna (criando se preciso) o lock do player do servidor."""
         if guild_id not in self.locks:
             self.locks[guild_id] = asyncio.Lock()
         return self.locks[guild_id]
 
     def limpar_estado(self, guild_id: int):
-        """Limpa fila, histórico e música atual de um servidor."""
         self.fila_de(guild_id).clear()
         self.historico_de(guild_id).clear()
         self.tocando_agora.pop(guild_id, None)
 
     async def conectar_voz(self, ctx: commands.Context) -> bool:
-        """Garante que o bot está em um canal de voz. Retorna False se falhar."""
         if ctx.voice_client:
             return True
 
@@ -111,7 +98,6 @@ class Music(commands.Cog):
         return True
 
     async def buscar_info(self, pesquisa: str) -> Optional[dict]:
-        """Busca as informações de uma música no yt-dlp. Retorna None se falhar."""
         self.ultimo_erro = None
         try:
             info = await asyncio.to_thread(
@@ -134,7 +120,6 @@ class Music(commands.Cog):
         return info
 
     def mensagem_falha(self, pesquisa: str) -> str:
-        """Explica no Discord por que a busca falhou, quando dá para saber."""
         erro = self.ultimo_erro or ""
 
         if "Sign in to confirm you're not a bot" in erro or "cookies" in erro:
@@ -153,30 +138,24 @@ class Music(commands.Cog):
 
         mensagem = f"❌ Não consegui encontrar/tocar: **{pesquisa}**"
         if erro:
-            # Mostra um resumo do erro real para facilitar o !reportbug
+
             resumo = erro.replace("ERROR: ", "").split("\n")[0][:200]
             mensagem += f"\n(`{resumo}`)"
         return mensagem
 
     @staticmethod
     def _expira_stream(stream_url: Optional[str]) -> float:
-        """Calcula até quando um link direto de áudio continua válido."""
         if not stream_url:
             return 0.0
 
-        # Links do YouTube trazem o horário de expiração na própria URL
+
         match = re.search(r"[?&]expire=(\d+)", stream_url)
         if match:
-            return int(match.group(1)) - 60  # margem de segurança
+            return int(match.group(1)) - 60
 
         return time.time() + 20 * 60
 
     async def resolver_stream(self, musica: Musica) -> bool:
-        """Garante que a música tem um link de áudio válido para tocar.
-
-        Reaproveita o link obtido na busca original enquanto ele vale —
-        é isso que faz a música começar rápido, sem buscar tudo de novo.
-        """
         if musica.stream_url and time.time() < musica.stream_expira:
             return True
 
@@ -189,7 +168,6 @@ class Music(commands.Cog):
         return True
 
     def embed_tocando(self, musica: Musica) -> discord.Embed:
-        """Embed de "tocando agora"."""
         embed = discord.Embed(
             title="🎶 Tocando agora",
             description=f"**[{musica.titulo}]({musica.url})**",
@@ -202,15 +180,13 @@ class Music(commands.Cog):
         return embed
 
     def _criar_callback(self, ctx: commands.Context):
-        """Cria o callback chamado pelo player quando uma música termina."""
         guild_id = ctx.guild.id
 
         def depois(erro):
             if erro:
                 print("ERRO NO PLAYER:", erro)
 
-            # Um seek (!jumpto/!reset) para o player de propósito;
-            # nesse caso não é para pular para a próxima música
+
             if guild_id in self.ignorar_fim:
                 self.ignorar_fim.discard(guild_id)
                 return
@@ -223,12 +199,10 @@ class Music(commands.Cog):
         return depois
 
     async def tocar_proxima(self, ctx: commands.Context):
-        """Toca a próxima música da fila."""
         guild_id = ctx.guild.id
         fila = self.fila_de(guild_id)
 
-        # O lock evita dois play() ao mesmo tempo (ex.: !tocar durante a
-        # troca de música), o que derrubaria o player
+
         async with self.lock_de(guild_id):
             while True:
                 if not ctx.voice_client or not ctx.voice_client.is_connected():
@@ -245,16 +219,15 @@ class Music(commands.Cog):
                 musica = fila.pop(0)
                 self.ultima_musica[guild_id] = musica
 
-                # O link direto do áudio expira; o resolver reaproveita o
-                # que já temos e só busca de novo quando é preciso
+
                 if not await self.resolver_stream(musica):
                     await ctx.send(
                         f"❌ Não consegui tocar: **{musica.titulo}**\n"
                         + self.mensagem_falha(musica.titulo)
                     )
-                    continue  # tenta a próxima da fila
+                    continue
 
-                # O bot pode ter sido desconectado durante a busca
+
                 if not ctx.voice_client or not ctx.voice_client.is_connected():
                     self.tocando_agora.pop(guild_id, None)
                     return
@@ -266,7 +239,7 @@ class Music(commands.Cog):
                 self.tocando_agora[guild_id] = {
                     "musica": musica,
                     "inicio": time.time(),
-                    "pausado_em": None  # marca quando a música foi pausada
+                    "pausado_em": None
                 }
 
                 historico = self.historico_de(guild_id)
@@ -275,8 +248,7 @@ class Music(commands.Cog):
 
                 ctx.voice_client.play(source, after=self._criar_callback(ctx))
 
-                # Resolve o áudio da próxima em segundo plano, para a troca
-                # de música ser praticamente instantânea
+
                 if fila:
                     asyncio.create_task(self.resolver_stream(fila[0]))
                 break
@@ -284,7 +256,6 @@ class Music(commands.Cog):
         await ctx.send(embed=self.embed_tocando(musica))
 
     async def pular_para(self, ctx: commands.Context, segundos: int) -> bool:
-        """Reposiciona a música atual em um tempo específico."""
         guild_id = ctx.guild.id
         atual = self.tocando_agora.get(guild_id)
         vc = ctx.voice_client
@@ -315,8 +286,7 @@ class Music(commands.Cog):
         )
         source = discord.FFmpegPCMAudio(musica.stream_url, **opcoes)
 
-        # O stop() abaixo dispara o callback de fim de música; a flag avisa
-        # que é um seek e não é para pular para a próxima
+
         self.ignorar_fim.add(guild_id)
         vc.stop()
         try:
@@ -328,20 +298,17 @@ class Music(commands.Cog):
             return False
 
         atual["inicio"] = time.time() - segundos
-        atual["pausado_em"] = None  # o play() acima retoma a música
+        atual["pausado_em"] = None
         return True
 
     @staticmethod
     def tempo_decorrido(atual: dict) -> float:
-        """Quanto tempo da música já tocou, descontando o tempo pausado."""
         agora = atual.get("pausado_em") or time.time()
         return agora - atual["inicio"]
 
-    # -------------------- Letra / legendas (!lyrics) --------------------
 
     @staticmethod
     def _limpar_titulo(titulo: str) -> str:
-        """Remove ruído tipo "(Official Video)" do título para a busca."""
         limpo = RUIDO_TITULO.sub(" ", titulo)
         limpo = re.sub(r"\s+", " ", limpo).strip(" -–|•")
         return limpo or titulo
@@ -349,7 +316,6 @@ class Music(commands.Cog):
     async def _letra_lrclib(
         self, session: aiohttp.ClientSession, titulo: str
     ) -> Optional[str]:
-        """Procura a letra da música no LRCLIB (API gratuita de letras)."""
         try:
             async with session.get(
                 "https://lrclib.net/api/search",
@@ -371,7 +337,6 @@ class Music(commands.Cog):
 
     @staticmethod
     def _escolher_legenda(info: dict) -> Optional[str]:
-        """Escolhe a melhor faixa de legenda (json3) do vídeo, se houver."""
         manuais = info.get("subtitles") or {}
         automaticas = info.get("automatic_captions") or {}
 
@@ -381,13 +346,13 @@ class Music(commands.Cog):
                     return formato["url"]
             return None
 
-        # Legendas feitas pelo autor têm prioridade, em qualquer idioma
+
         for idioma in IDIOMAS_LEGENDA + sorted(manuais.keys()):
             url = url_json3(manuais.get(idioma))
             if url:
                 return url
 
-        # Automáticas: só nos idiomas preferidos ou no idioma original
+
         originais = [k for k in automaticas if k.endswith("-orig")]
         for idioma in IDIOMAS_LEGENDA + originais:
             url = url_json3(automaticas.get(idioma))
@@ -398,7 +363,6 @@ class Music(commands.Cog):
 
     @staticmethod
     def _montar_texto_json3(dados: dict) -> Optional[str]:
-        """Converte a legenda no formato json3 do YouTube em texto corrido."""
         linhas = []
         for evento in dados.get("events", []):
             segmentos = evento.get("segs")
@@ -413,7 +377,6 @@ class Music(commands.Cog):
     async def _legenda_video(
         self, session: aiohttp.ClientSession, musica: Musica
     ) -> Optional[str]:
-        """Baixa e monta a legenda do vídeo atual, se existir."""
         info = await self.buscar_info(musica.url)
         if info is None:
             return None
@@ -437,10 +400,6 @@ class Music(commands.Cog):
         return self._montar_texto_json3(dados)
 
     async def obter_letra(self, musica: Musica):
-        """Busca a letra da música; se não achar, cai para a legenda do vídeo.
-
-        Retorna (texto, fonte) ou (None, None).
-        """
         async with aiohttp.ClientSession() as session:
             letra = await self._letra_lrclib(session, musica.titulo)
             if letra:
@@ -454,10 +413,6 @@ class Music(commands.Cog):
 
     @staticmethod
     def _dividir_texto(texto: str, limite: int = 3900, max_partes: int = 3):
-        """Divide um texto longo em blocos que cabem em embeds.
-
-        Retorna (partes, foi_cortado).
-        """
         partes = []
         restante = texto
 
@@ -475,13 +430,9 @@ class Music(commands.Cog):
 
         return partes, bool(restante)
 
-    # ------------------------------------------------------------------
-    # Comandos
-    # ------------------------------------------------------------------
 
     @commands.command()
     async def entrar(self, ctx: commands.Context):
-        """Entra no canal de voz."""
         if ctx.voice_client:
             await ctx.send("Já estou conectado.")
             return
@@ -491,7 +442,6 @@ class Music(commands.Cog):
 
     @commands.command(aliases=["play", "p"])
     async def tocar(self, ctx: commands.Context, *, pesquisa: str):
-        """Toca uma música ou adiciona à fila."""
         if not await self.conectar_voz(ctx):
             return
 
@@ -508,7 +458,7 @@ class Music(commands.Cog):
             duracao=info.get("duration"),
             thumb=info.get("thumbnail"),
             pedido_por=ctx.author.display_name,
-            # Guarda o link do áudio já resolvido: tocar fica instantâneo
+
             stream_url=info.get("url"),
             stream_expira=self._expira_stream(info.get("url"))
         )
@@ -536,7 +486,6 @@ class Music(commands.Cog):
 
     @commands.command()
     async def replay(self, ctx: commands.Context):
-        """Volta para o início da última música tocada; a atual fica como próxima."""
         guild_id = ctx.guild.id
 
         if not await self.conectar_voz(ctx):
@@ -553,14 +502,14 @@ class Music(commands.Cog):
             if len(historico) >= 2:
                 anterior = historico[-2]
                 fila.insert(0, anterior)
-                fila.insert(1, atual)  # a atual volta a tocar em seguida
-                vc.stop()  # o callback de fim toca a "anterior"
+                fila.insert(1, atual)
+                vc.stop()
                 await ctx.send(
                     f"🔁 Voltando para **{anterior.titulo}** — "
                     f"**{atual.titulo}** ficará como próxima."
                 )
             else:
-                # Só a música atual já tocou: volta ela para o início
+
                 if await self.pular_para(ctx, 0):
                     await ctx.send(
                         f"🔁 **{atual.titulo}** voltou para o início."
@@ -576,7 +525,6 @@ class Music(commands.Cog):
 
     @commands.command()
     async def replayall(self, ctx: commands.Context):
-        """Duplica todas as músicas (fila e já tocadas) como próximas."""
         guild_id = ctx.guild.id
         fila = self.fila_de(guild_id)
         historico = self.historico_de(guild_id)
@@ -608,7 +556,6 @@ class Music(commands.Cog):
 
     @commands.command()
     async def jumpto(self, ctx: commands.Context, *, tempo: str):
-        """Pula a música atual para um momento específico (ex.: !jumpto 1:23)."""
         segundos = parsear_tempo(tempo)
 
         if segundos is None:
@@ -623,13 +570,11 @@ class Music(commands.Cog):
 
     @commands.command()
     async def reset(self, ctx: commands.Context):
-        """Reseta o tempo da música atual (volta para o início)."""
         if await self.pular_para(ctx, 0):
             await ctx.send("⏪ Música reiniciada do começo.")
 
     @commands.command(aliases=["letra"])
     async def lyrics(self, ctx: commands.Context):
-        """Mostra a letra da música atual (ou a legenda do vídeo)."""
         atual = self.tocando_agora.get(ctx.guild.id)
 
         if not atual:
@@ -668,20 +613,18 @@ class Music(commands.Cog):
 
     @commands.command()
     async def skip(self, ctx: commands.Context):
-        """Pula para a próxima música da fila."""
         if not ctx.voice_client:
             await ctx.send("Não estou em um canal de voz.")
             return
 
         if ctx.voice_client.is_playing() or ctx.voice_client.is_paused():
-            ctx.voice_client.stop()  # o callback "depois" toca a próxima
+            ctx.voice_client.stop()
             await ctx.send("⏭️ Música pulada.")
         else:
             await ctx.send("Não há nenhuma música tocando.")
 
     @commands.command(name="duração", aliases=["duracao", "np"])
     async def duracao(self, ctx: commands.Context):
-        """Mostra a duração e o progresso da música atual."""
         atual = self.tocando_agora.get(ctx.guild.id)
 
         if not atual or not ctx.voice_client or not (
@@ -718,7 +661,6 @@ class Music(commands.Cog):
 
     @commands.command(aliases=["queue", "q"])
     async def fila(self, ctx: commands.Context):
-        """Mostra as músicas na fila."""
         fila = self.fila_de(ctx.guild.id)
         atual = self.tocando_agora.get(ctx.guild.id)
 
@@ -772,7 +714,6 @@ class Music(commands.Cog):
 
     @commands.command(aliases=["remover", "rf"])
     async def removerdafila(self, ctx: commands.Context, numero: int):
-        """Remove uma música da fila pelo número dela."""
         fila = self.fila_de(ctx.guild.id)
 
         if not fila:
@@ -790,7 +731,6 @@ class Music(commands.Cog):
 
     @commands.command()
     async def mover(self, ctx: commands.Context, de: int, para: int):
-        """Move uma música de posição na fila."""
         fila = self.fila_de(ctx.guild.id)
 
         if not fila:
@@ -820,7 +760,6 @@ class Music(commands.Cog):
 
     @commands.command()
     async def pausar(self, ctx: commands.Context):
-        """Pausa a música em execução."""
         if not ctx.voice_client:
             await ctx.send("Não estou em um canal de voz.")
             return
@@ -836,7 +775,6 @@ class Music(commands.Cog):
 
     @commands.command()
     async def continuar(self, ctx: commands.Context):
-        """Retoma a música pausada."""
         if not ctx.voice_client:
             await ctx.send("Não estou em um canal de voz.")
             return
@@ -845,7 +783,7 @@ class Music(commands.Cog):
             ctx.voice_client.resume()
             atual = self.tocando_agora.get(ctx.guild.id)
             if atual and atual.get("pausado_em"):
-                # Empurra o "início" para frente: o tempo pausado não conta
+
                 atual["inicio"] += time.time() - atual["pausado_em"]
                 atual["pausado_em"] = None
             await ctx.send("▶️ Música retomada.")
@@ -854,7 +792,6 @@ class Music(commands.Cog):
 
     @commands.command()
     async def fim(self, ctx: commands.Context):
-        """Finaliza a música atual (a próxima da fila continua)."""
         if not ctx.voice_client:
             await ctx.send("Não estou em um canal de voz.")
             return
@@ -867,7 +804,6 @@ class Music(commands.Cog):
 
     @commands.command()
     async def encerrar(self, ctx: commands.Context):
-        """Limpa a fila e para a música atual."""
         fila = self.fila_de(ctx.guild.id)
         fila.clear()
 
@@ -883,7 +819,6 @@ class Music(commands.Cog):
 
     @commands.command()
     async def sair(self, ctx: commands.Context):
-        """Sai do canal de voz."""
         if ctx.voice_client:
             self.limpar_estado(ctx.guild.id)
             await ctx.voice_client.disconnect()
@@ -893,5 +828,4 @@ class Music(commands.Cog):
 
 
 async def setup(bot: commands.Bot):
-    """Setup do cog Music."""
     await bot.add_cog(Music(bot))
